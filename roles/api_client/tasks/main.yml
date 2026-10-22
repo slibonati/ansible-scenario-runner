@@ -24,6 +24,7 @@
 
 - name: Assert response message field when requested
   when:
+    - not (api_response.skipped | default(false))
     - api_message_field | length > 0
     - api_expected_message | length > 0
   ansible.builtin.assert:
@@ -36,6 +37,7 @@
       got {{ api_response.json | default({}) }}
 
 - name: Show API response summary
+  when: not (api_response.skipped | default(false))
   ansible.builtin.debug:
     msg:
       status: "{{ api_response.status }}"

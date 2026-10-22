@@ -1,6 +1,49 @@
 # ansible-scenario-runner
 
-Collection **`demo.scenarios`** with one demo role:
+A lightweight execution model for scenario-based validation, built on Ansible
+playbooks, roles, variables, and native check mode. Run one scenario while
+iterating or an ordered suite for regression testing, with timestamped logs
+for each run.
+
+## Motivation
+
+This started with a practical problem: development runs and role tests used
+different execution paths. Scenarios ran individually, evidence capture was
+manual, and reproducing a previous run required reconstructing its inputs.
+
+The runner makes the role's `tests/` directory the shared execution location.
+Scenario files declare inputs, a suite manifest declares order and expected
+outcomes, and the scripts capture results as files. The playbook, inventory,
+and scenarios live alongside the role in Git. Secrets stay local.
+
+Molecule was explored, but setup friction in the target environment and the
+complexity needed for this use case led to a smaller harness built directly
+on Ansible primitives.
+
+## Execution model
+
+1. `run-all.sh` reads the ordered `scenario-suite.yml` manifest and calls
+   `run.sh` for each entry. You can also run a scenario directly.
+2. `run.sh` invokes `ansible-navigator` with the playbook, inventory, vault,
+   execution environment, and scenario file path.
+3. `test.yml` loads the scenario variables, validates the check-mode setting,
+   and invokes the role with Ansible's native `check_mode` keyword.
+4. The runner saves a timestamped scenario log. Suite runs continue across
+   failures and produce a pass/fail summary.
+
+The baseline is one playbook and one inventory. Explicit manifest overrides
+allow a scenario to use another playbook, inventory, vault file, or verbosity.
+A custom playbook must load the scenario variables and apply check mode if it
+needs the same behavior. The shell wrappers remain optional: you can invoke
+Ansible directly using the same playbook and scenario input.
+
+Versioned inputs make reruns easier to reproduce. Results still depend on the
+target system, secrets, and execution environment; pin the environment image
+when you need consistent dependencies.
+
+## Included demo
+
+Collection **`demo.scenarios`** contains one demo role:
 
 - **`api_client`** — calls a Bearer-authenticated REST API via `ansible.builtin.uri`
   (secrets from an ansible-vault–encrypted file; request shape from scenario files)
@@ -173,8 +216,69 @@ The manifest sets **defaults** (playbook, inventory, vault_file, verbosity) and 
 vault / verbosity and set `expected_failure: true` for negative cases (ansible
 must fail for that entry to count as a suite pass).
 
-Demo suite includes `unknown-path` (mock 404 vs expected 200) with
-`expected_failure: true`.
+The demo suite includes `unknown-path` (mock 404 vs expected 200) with
+`expected_failure: true`, plus `happy-path-check` for native check mode.
+Expected failure means a nonzero Ansible exit counts as a pass; it does not
+verify the specific cause of failure.
+
+### Scenario-controlled check mode
+
+Declare check mode in the scenario file itself. For example,
+`scenarios/happy-path-check.yml` contains:
+
+```yaml
+scenario_check_mode: true
+api_path: /v1/message
+api_method: GET
+api_expected_status: 200
+api_message_field: message
+api_expected_message: Hello from mock API
+```
+
+Run it individually or add its name to the suite:
+
+```bash
+./run.sh happy-path-check
+```
+
+```yaml
+scenarios:
+  - name: happy-path
+  - name: happy-path-check
+```
+
+The `-check` suffix is a naming convention. The boolean variable controls
+execution. `run.sh` already passes the scenario path to `test.yml`, so no
+additional shell flag or suite setting is needed. After loading the variables,
+the playbook applies this setting to the role:
+
+```yaml
+roles:
+  - role: "{{ playbook_dir }}/.."
+    check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+```
+
+Omitting `scenario_check_mode`, or setting it to `false`, uses normal execution
+unless Ansible was explicitly invoked with `--check`. Use YAML booleans
+`true` and `false`, not quoted strings. The built-in `ansible_check_mode`
+reflects the CLI flag; the scenario variable selects the role's keyword setting.
+
+This uses Ansible's native module behavior. Modules that support check mode
+can predict changes; others may skip execution. The demo's `uri` request is
+skipped, so response assertions and the response summary are skipped as well.
+A passing check-mode scenario does not validate a live API response.
+
+### Adding scenarios and regression coverage
+
+Create a file in `scenarios/` with the role inputs and expected results, then
+add its name to `scenario-suite.yml`. Existing cases run again whenever you
+invoke `./run-all.sh`; adding a scenario does not require changing the scripts.
+Use a descriptive qualifier such as `-check` for variants so logs identify
+what was exercised. Store credentials separately in the local vault.
+
+Suite runs preserve the declared order, continue after failures, and return
+nonzero if any scenario fails its expected outcome. Use the scenario logs and
+suite summary as evidence when reviewing a change.
 
 ### Logs
 
@@ -209,25 +313,27 @@ Without credentials the role fails with a clear assert pointing at
 
 ---
 
-## Design notes
+## Reusing the harness
 
-- **Per-role harness copy is intentional** — each role keeps a self-contained
-  `tests/` tree (playbook, scenarios, mock, wrappers) so demos stay checkout-
-  and-run without a shared mega-harness.
-- **Wrappers are optional** — `./run.sh` / `./run-all.sh` are convenience only;
-  they invoke **ansible-navigator**. The durable interface is the playbook plus
-  `-e scenario_vars=…` under an EE.
-- **Escape hatch** — slides and navigator use the same hook:
-  `-e scenario_vars=scenarios/<name>.yml` (relative to `playbook_dir`).
-- **Mock API stays on the host** — start it with `mock_api/start.sh`; the EE
-  reaches it via host networking (`NAVIGATOR_CONTAINER_OPTIONS`).
-- **Logs are portable artifacts** — sanitized files under `logs/` are meant to
-  be skimmed or shared; console output stays raw.
-- **Vault is still required for secrets** — scenario files never hold tokens;
-  encrypt `vault.yml` and unlock via `.vault_pass` /
-  `ANSIBLE_VAULT_PASSWORD_FILE`.
+Each role keeps a self-contained `tests/` directory. Copy the harness into
+another role, update its scenario inputs and assertions, and adjust the inventory
+and execution environment for the target. The playbook loads its enclosing role
+by path. Keep `scenario_check_mode` handling when adapting the playbook.
 
----
+The mock API is specific to this example and stays on the host. The execution
+environment reaches it through `NAVIGATOR_CONTAINER_OPTIONS` host networking.
+
+## Harness regression tests
+
+With `ansible-playbook` installed, run from the repository root:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+These tests use an isolated temporary role to verify that check mode predicts
+file changes without writing, normal mode writes, the CLI check flag remains
+effective, and invalid scenario settings fail before the role runs.
 
 ## Collection install (optional)
 

@@ -24,3 +24,4 @@ scenarios:
   - name: health-no-auth
   - name: unknown-path
     expected_failure: true
+  - name: happy-path-check

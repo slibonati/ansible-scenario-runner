@@ -55,5 +55,17 @@
     - name: Load scenario variables
       ansible.builtin.include_vars:
         file: "{{ scenario_vars_file }}"
+
+    - name: Validate scenario check mode
+      ansible.builtin.assert:
+        that:
+          - scenario_check_mode is not defined or scenario_check_mode is boolean
+        fail_msg: "scenario_check_mode must be a YAML boolean (true or false)."
+
+    - name: Show scenario execution mode
+      ansible.builtin.debug:
+        msg: "Role check mode: {{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+
   roles:
-    - "{{ playbook_dir }}/.."
+    - role: "{{ playbook_dir }}/.."
+      check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"

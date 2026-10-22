@@ -1,0 +1,8 @@
+---
+# Same inputs as happy-path, executed with Ansible native check mode.
+scenario_check_mode: true
+api_path: /v1/message
+api_method: GET
+api_expected_status: 200
+api_message_field: message
+api_expected_message: Hello from mock API
