@@ -1,0 +1,12 @@
+---
+# Demo inventory for local mock-API scenarios (committed; no secrets).
+# Prefer ./run.sh (ansible-navigator). Manual escape hatch:
+#   ansible-navigator run test.yml -i inventory.yml \
+#     --eei "$EE_IMAGE" --mode stdout --pae false \
+#     --vault-password-file .vault_pass \
+#     -e @vault.yml -e scenario_vars=scenarios/happy-path.yml
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"

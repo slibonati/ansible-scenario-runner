@@ -1,0 +1,10 @@
+---
+# POST /v1/echo — different path and JSON body (secrets stay in vault.yml)
+api_path: /v1/echo
+api_method: POST
+api_body:
+  message: scenario echo
+  from: ansible-scenario-demo
+api_expected_status: 200
+api_message_field: message
+api_expected_message: scenario echo

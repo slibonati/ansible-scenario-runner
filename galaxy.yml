@@ -1,0 +1,25 @@
+---
+namespace: demo
+name: scenarios
+version: 0.1.0
+readme: README.md
+authors:
+  - Contributors
+description: >
+  Demo Ansible collection with an api_client role (vaulted Bearer URI),
+  exercised with inventory + scenario files.
+license:
+  - MIT
+tags:
+  - demo
+  - api
+  - example
+dependencies: {}
+repository: ""
+documentation: ""
+homepage: ""
+issues: ""
+build_ignore:
+  - .git
+  - .gitignore
+  - .venv

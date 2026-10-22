@@ -1,0 +1,6 @@
+vault.yml
+.vault_pass
+*.retry
+mock_api/.mock_api.pid
+mock_api/.mock_api.log
+logs/*.log

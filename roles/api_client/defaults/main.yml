@@ -1,0 +1,18 @@
+---
+# Base URL of the mock (or real) API. Override via vault / scenarios.
+api_base_url: http://127.0.0.1:8765
+
+# Bearer token — set via vault.yml (do not commit secrets).
+api_token: ""
+
+# Request shape (scenarios override these; secrets stay in vault).
+api_path: /v1/message
+api_method: GET
+api_body: {}
+api_headers: {}
+
+# Assertions after the call
+api_expected_status: 200
+# If set, response JSON must contain this field (value may be asserted via api_expected_message).
+api_message_field: message
+api_expected_message: ""

@@ -1,0 +1,11 @@
+*.retry
+__pycache__/
+.venv/
+*.pyc
+
+# Local secrets for the role test harness (encrypted vault + password file)
+roles/*/tests/vault.yml
+roles/*/tests/.vault_pass
+
+# Local Ansible Navigator runtime logs
+ansible-navigator.log

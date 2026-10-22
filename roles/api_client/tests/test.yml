@@ -1,0 +1,59 @@
+---
+- name: Apply api_client role
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  pre_tasks:
+    - name: Require scenario_vars extra-var
+      ansible.builtin.assert:
+        that:
+          - scenario_vars is defined
+          - (scenario_vars | string | length) > 0
+        fail_msg: >-
+          scenario_vars is required. Pass a path relative to this playbook
+          directory, e.g. -e scenario_vars=scenarios/happy-path.yml
+          (or use ./run.sh happy-path). Running test.yml without
+          that extra-var is not supported.
+
+    - name: Resolve scenario_vars against playbook_dir
+      ansible.builtin.set_fact:
+        scenario_vars_file: >-
+          {{
+            scenario_vars
+            if (scenario_vars | string) is match('^/')
+            else (playbook_dir ~ '/' ~ (scenario_vars | string))
+          }}
+
+    - name: Stat scenario vars file
+      ansible.builtin.stat:
+        path: "{{ scenario_vars_file }}"
+      register: _scenario_vars_stat
+
+    - name: Assert scenario vars file exists
+      ansible.builtin.assert:
+        that:
+          - _scenario_vars_stat.stat.exists | bool
+          - _scenario_vars_stat.stat.isreg | bool
+        fail_msg: >-
+          scenario_vars file not found: {{ scenario_vars_file }}.
+          Pass a path relative to the playbook directory
+          (e.g. -e scenario_vars=scenarios/happy-path.yml)
+          or use ./run.sh happy-path.
+
+    - name: Assert scenario vars file stays under playbook_dir
+      ansible.builtin.assert:
+        that:
+          - >-
+            (scenario_vars_file | realpath).startswith(
+              (playbook_dir | realpath) ~ '/'
+            )
+        fail_msg: >-
+          scenario_vars must resolve under {{ playbook_dir }}
+          (got {{ scenario_vars_file | realpath }}). Paths that escape
+          this directory (e.g. ../) are not allowed.
+
+    - name: Load scenario variables
+      ansible.builtin.include_vars:
+        file: "{{ scenario_vars_file }}"
+  roles:
+    - "{{ playbook_dir }}/.."

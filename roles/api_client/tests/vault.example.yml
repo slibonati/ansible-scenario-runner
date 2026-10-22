@@ -1,0 +1,17 @@
+---
+# Plaintext template of keys required in the encrypted vault.yml (committed).
+# Do NOT use this file as vault.yml for real runs — encrypt secrets instead:
+#
+#   cd roles/api_client/tests
+#   ./setup-vault.sh
+#
+# Or manually:
+#   printf '%s\n' 'your-password' > .vault_pass && chmod 600 .vault_pass
+#   cp vault.example.yml vault.yml   # edit api_token / api_base_url if needed
+#   ansible-vault encrypt vault.yml --vault-password-file .vault_pass
+#
+# Mock API default Bearer token is "change-me" (see tests/mock_api/server.py).
+# Override the running mock with MOCK_API_TOKEN if you change api_token here.
+
+api_base_url: http://127.0.0.1:8765
+api_token: change-me

@@ -1,0 +1,42 @@
+---
+- name: Require API credentials
+  ansible.builtin.assert:
+    that:
+      - api_token is defined
+      - api_token | length > 0
+      - api_base_url is defined
+      - api_base_url | length > 0
+    fail_msg: >-
+      api_token and api_base_url are required. From roles/api_client/tests/,
+      run ./setup-vault.sh (encrypts vault.yml), then pass
+      -e @vault.yml with --vault-password-file .vault_pass
+
+- name: Call authenticated API
+  ansible.builtin.uri:
+    url: "{{ api_base_url }}{{ api_path }}"
+    method: "{{ api_method }}"
+    headers: "{{ {'Authorization': 'Bearer ' ~ api_token} | combine(api_headers) }}"
+    body: "{{ api_body if api_method | upper != 'GET' else omit }}"
+    body_format: "{{ 'json' if api_method | upper != 'GET' else omit }}"
+    status_code: "{{ api_expected_status }}"
+    return_content: true
+  register: api_response
+
+- name: Assert response message field when requested
+  when:
+    - api_message_field | length > 0
+    - api_expected_message | length > 0
+  ansible.builtin.assert:
+    that:
+      - api_response.json is defined
+      - api_response.json[api_message_field] is defined
+      - api_response.json[api_message_field] == api_expected_message
+    fail_msg: >-
+      Expected {{ api_message_field }}={{ api_expected_message | quote }},
+      got {{ api_response.json | default({}) }}
+
+- name: Show API response summary
+  ansible.builtin.debug:
+    msg:
+      status: "{{ api_response.status }}"
+      json: "{{ api_response.json | default({}) }}"

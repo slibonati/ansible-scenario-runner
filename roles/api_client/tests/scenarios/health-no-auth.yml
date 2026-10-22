@@ -1,0 +1,8 @@
+---
+# GET /health — public endpoint (still pass vault for api_base_url / token presence;
+# token is unused by /health but required by the role's credential check).
+api_path: /health
+api_method: GET
+api_expected_status: 200
+api_message_field: status
+api_expected_message: ok

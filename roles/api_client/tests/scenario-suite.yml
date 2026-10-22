@@ -1,0 +1,26 @@
+---
+# Ordered suite for ./run-all.sh. Execution order = list order.
+# Paths are relative to this tests/ directory unless absolute.
+#
+# Per-scenario keys (all optional except name):
+#   name              — required; also used for logs and default scenario file
+#   scenario / file   — vars file (default: scenarios/<name>.yml)
+#   playbook          — override defaults.playbook
+#   inventory         — override defaults.inventory
+#   vault_file        — override defaults.vault_file
+#   verbosity         — 0–5 (override defaults.verbosity)
+#   expected_failure  — if true, ansible non-zero exit is a suite pass;
+#                       ansible zero exit is a suite failure (unexpected success)
+
+defaults:
+  playbook: test.yml
+  inventory: inventory.yml
+  vault_file: vault.yml
+  verbosity: 0
+
+scenarios:
+  - name: happy-path
+  - name: echo-payload
+  - name: health-no-auth
+  - name: unknown-path
+    expected_failure: true

@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: api_client
+  author: contributors
+  description: Call a Bearer-authenticated REST API via ansible.builtin.uri using vaulted credentials.
+  license: MIT
+  min_ansible_version: "2.15"
+  standalone: false
+  platforms:
+    - name: GenericLinux
+      versions:
+        - all
+  galaxy_tags:
+    - demo
+    - api
+    - uri
+dependencies: []
