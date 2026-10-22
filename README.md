@@ -20,164 +20,220 @@ Molecule was explored, but setup friction in the target environment and the
 complexity needed for this use case led to a smaller harness built directly
 on Ansible primitives.
 
-## Execution model
+## How it works
 
-1. `run-all.sh` reads the ordered `scenario-suite.yml` manifest and calls
-   `run.sh` for each entry. You can also run a scenario directly.
-2. `run.sh` invokes `ansible-navigator` with the playbook, inventory, vault,
-   execution environment, and scenario file path.
-3. `test.yml` loads the scenario variables, validates the check-mode setting,
-   and invokes the role with Ansible's native `check_mode` keyword.
-4. The runner saves a timestamped scenario log. Suite runs continue across
-   failures and produce a pass/fail summary.
+The framework lives in each role's `tests/` directory. Its reusable scripts
+currently reside under `roles/api_client/tests/` in this repository, alongside
+the worked example.
 
-The baseline is one playbook and one inventory. Explicit manifest overrides
-allow a scenario to use another playbook, inventory, vault file, or verbosity.
-A custom playbook must load the scenario variables and apply check mode if it
-needs the same behavior. The shell wrappers remain optional: you can invoke
-Ansible directly using the same playbook and scenario input.
+1. `run-all.sh` reads the suite manifest and calls `run.sh` in the declared order.
+2. `run.sh` invokes `ansible-navigator` with the execution context and scenario path.
+3. `test.yml` loads scenario variables and invokes the enclosing role, applying
+   the scenario's native check-mode setting.
+4. Each run produces a timestamped log. Suite runs continue across failures
+   and produce a pass/fail summary.
+
+The baseline is one playbook and one inventory, with explicit overrides for
+cases that need a different execution context. The wrappers are optional:
+the playbook and scenario files can also be used directly with Ansible.
+
+### Framework files
+
+The following layout is the pattern to use inside your own role:
+
+```text
+roles/<your-role>/tests/
+  run.sh                 # run one scenario
+  run-all.sh             # run an ordered suite
+  env.sh                 # paths and execution environment
+  lib/log.sh             # log capture and text cleanup
+  test.yml               # load scenario variables and invoke the role
+  inventory.yml          # default target inventory
+  scenario-suite.yml     # ordered scenarios and execution overrides
+  scenarios/*.yml        # role inputs, expected results, check-mode setting
+  vault.example.yml      # credential template without real secrets
+  setup-vault.sh         # create the local encrypted vault
+  .gitignore             # exclude credentials and runtime artifacts
+  logs/.gitkeep          # retain the empty log directory in Git
+```
+
+Commit the harness, scenarios, inventory, and credential template. Keep the
+local `vault.yml`, `.vault_pass`, and runtime logs out of Git. The supplied
+scripts currently require a vault file and password file for each run.
+
+### Prerequisites
+
+- Bash and Python 3, with PyYAML for suite manifest parsing.
+- `ansible-navigator` and a container engine such as Podman or Docker.
+- An Ansible execution environment image containing the role's dependencies.
+- `ansible-vault` for local vault setup.
 
 Versioned inputs make reruns easier to reproduce. Results still depend on the
-target system, secrets, and execution environment; pin the environment image
-when you need consistent dependencies.
+target system, secrets, and execution environment. Pin the environment image
+when consistent dependencies matter.
 
-## Included demo
+## Scenario configuration
 
-Collection **`demo.scenarios`** contains one demo role:
+### Inputs and assertions
 
-- **`api_client`** — calls a Bearer-authenticated REST API via `ansible.builtin.uri`
-  (secrets from an ansible-vault–encrypted file; request shape from scenario files)
+A scenario is a YAML variables file under `scenarios/`. It supplies the role's
+inputs and any expected values used by your assertions. The role or test
+playbook owns the assertion logic; the runner uses Ansible's exit status.
 
-## Layout
+`run.sh` passes the scenario path as `scenario_vars`. The supplied `test.yml`
+resolves it relative to the playbook directory, checks that it exists and stays
+under that directory, then loads it with `include_vars`. Credentials are loaded
+separately from the vault.
 
-```
-galaxy.yml
-meta/runtime.yml
-roles/api_client/
-  defaults/ / tasks/ / meta/
-  tests/
-    test.yml             # harness playbook (source of truth)
-    inventory.yml        # committed localhost inventory
-    vault.example.yml    # plaintext key template (committed)
-    setup-vault.sh       # copy example → encrypt vault.yml
-    env.sh               # EE_IMAGE, vault password file, inventory paths
-    lib/log.sh           # sanitized run logging helpers
-    scenario-suite.yml   # ordered suite manifest for run-all.sh
-    scenarios/
-    logs/                # run output (*.log gitignored; .gitkeep committed)
-    mock_api/            # stdlib Python mock REST API
-    run.sh               # single scenario
-    run-all.sh           # full suite from scenario-suite.yml
+### Native check mode
+
+Set this variable in a scenario file to apply Ansible's native check mode to
+the role:
+
+```yaml
+scenario_check_mode: true
+# Add the role's inputs and expected values here.
 ```
 
-Checkout-and-run artifacts under `roles/api_client/tests/`: **`test.yml`**,
-`inventory.yml`, `scenarios/*.yml`, `scenario-suite.yml`, `vault.example.yml`,
-`setup-vault.sh`, `env.sh`, `lib/log.sh`, `mock_api/`, `run.sh`, and
-`run-all.sh`. Local-only (gitignored): encrypted **`vault.yml`**,
-**`.vault_pass`**, and **`logs/*.log`**.
+Use a filename qualifier such as `-check` to make the intent visible. The
+variable controls execution; the filename is only a convention. Single runs
+and suite runs load the same setting without additional shell flags.
 
-Role FQCN: `demo.scenarios.api_client`
+After loading the scenario, the playbook invokes the role with:
 
----
+```yaml
+roles:
+  - role: "{{ playbook_dir }}/.."
+    check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+```
 
-## API client role (vault + mock API)
+Omitting the variable or setting it to `false` uses normal execution unless
+Ansible was explicitly invoked with `--check`. Use YAML booleans `true` and
+`false`, not quoted strings. The built-in `ansible_check_mode` reflects the CLI
+flag; the scenario variable selects the role's keyword setting.
 
-Needs **`ansible-navigator`** (plus podman or docker), **`ansible-vault`**
-for vault setup, and **PyYAML** (`python3` + `yaml`) for `run-all.sh`
-manifest parsing. Scenario runs go through an execution environment
-(`EE_IMAGE`). The playbook loads the role by path, so you do not have to
-install the collection first.
+Check-mode behavior depends on the modules used by the role. Some predict
+changes; others skip execution. Assertions that depend on skipped tasks must
+account for missing results. Adapted playbooks must retain the variable loading,
+validation, and role keyword if they need this behavior.
 
-### 1. Start the mock API
+### Suite manifest and expected failures
 
-Stdlib only (no pip). Default listen: `127.0.0.1:8765`, Bearer token
-`change-me` (override with `MOCK_API_TOKEN`).
+`scenario-suite.yml` declares defaults and an ordered list of cases. This
+illustrative manifest assumes matching scenario files exist:
+
+```yaml
+defaults:
+  playbook: test.yml
+  inventory: inventory.yml
+  vault_file: vault.yml
+  verbosity: 0
+
+scenarios:
+  - name: baseline
+  - name: baseline-check
+  - name: invalid-input
+    expected_failure: true
+  - name: alternate-target
+    scenario: scenarios/baseline.yml
+    inventory: inventory-alternate.yml
+```
+
+| Entry field | Behavior |
+| --- | --- |
+| `name` | Required case name; default vars file is `scenarios/<name>.yml` |
+| `scenario` or `file` | Explicit scenario vars file |
+| `playbook` | Override the default test playbook |
+| `inventory` | Override the default inventory |
+| `vault_file` | Override the default vault |
+| `verbosity` | Override verbosity, from 0 to 5 |
+| `expected_failure` | A nonzero Ansible exit counts as a pass |
+
+Manifest paths resolve relative to the role's `tests/` directory unless
+absolute. Check mode belongs in the scenario variables file, not the manifest.
+Expected failure checks the exit status, not the specific cause of failure;
+an unexpected success fails that case.
+
+## Running tests and reading results
+
+Run commands from your role's `tests/` directory. The examples below use
+`baseline` as a placeholder for a scenario you have created.
+
+### Single scenario
 
 ```bash
-roles/api_client/tests/mock_api/start.sh start   # stop | status | restart
+./run.sh baseline
+./run.sh baseline 2
+./run.sh scenarios/baseline.yml -vv
+EXPECTED_FAILURE=1 ./run.sh invalid-input
 ```
 
-Endpoints:
+The interface is `./run.sh <scenario> [verbosity]`. A scenario can be a name,
+filename, or path. Verbosity accepts `0`–`5` or `-v` through `-vvvvv`.
+A normal run returns Ansible's exit code. `EXPECTED_FAILURE=1` maps an Ansible
+failure to success and an unexpected success to failure.
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| `GET` | `/health` | none | `{"status":"ok"}` |
-| `GET` | `/v1/message` | Bearer | `{"message":"Hello from mock API",...}` |
-| `POST` | `/v1/echo` | Bearer | echoes JSON body |
-
-### 2. Create an encrypted vault
-
-`vault.example.yml` documents required keys and stays **plaintext + committed**.
-Runtime secrets live in **encrypted** `vault.yml` (gitignored), unlocked via
-**`.vault_pass`** (also gitignored).
+### Full suite
 
 ```bash
-cd roles/api_client/tests
-./setup-vault.sh
-# prompts for a vault password, writes .vault_pass, copies the example,
-# then runs: ansible-vault encrypt vault.yml --vault-password-file .vault_pass
+./run-all.sh
+./run-all.sh scenario-suite.yml
+./run-all.sh --clean-logs
 ```
 
-Manual equivalent:
+The suite runs in manifest order, continues after individual failures, and
+returns nonzero if any case fails its expected outcome. Add new scenario files
+and manifest entries to expand regression coverage without changing the scripts.
+
+### Execution context
+
+`env.sh` supplies defaults. Override these variables before invoking a runner:
+
+| Variable | Purpose |
+| --- | --- |
+| `PLAYBOOK`, `INVENTORY` | Test playbook and target inventory |
+| `VAULT_FILE` | Encrypted variables file |
+| `ANSIBLE_VAULT_PASSWORD_FILE` | Local password-file path, default `.vault_pass` |
+| `EE_IMAGE` | Execution environment image |
+| `EE_PULL_POLICY` | Image pull policy, default `missing` |
+| `NAVIGATOR_CONTAINER_OPTIONS` | Container options; bundled default is `--network=host` |
+| `LOGS_DIR` | Output directory, default `logs/` |
+| `LOG_FILE` | Explicit single-run log path |
+| `SKIP_LOG` | Set to `1` to disable scenario log capture |
+
+For example:
 
 ```bash
-cd roles/api_client/tests
-printf '%s\n' 'your-password' > .vault_pass && chmod 600 .vault_pass
-cp vault.example.yml vault.yml
-# edit api_token / api_base_url in vault.yml if needed
-ansible-vault encrypt vault.yml --vault-password-file .vault_pass
+EE_IMAGE=localhost/my-ansible-ee:latest ./run.sh baseline
+PLAYBOOK=alternate-test.yml INVENTORY=alternate-inventory.yml ./run.sh baseline
 ```
 
-Edit later: `ansible-vault edit vault.yml --vault-password-file .vault_pass`
+The bundled image default is `quay.io/ansible/creator-ee:latest`. Select an image
+appropriate for your role. Suite manifest defaults and entry overrides determine
+the playbook, inventory, vault, and verbosity passed to each scenario.
 
-### 3. Run a scenario
+### Logs
 
-`test.yml` requires a **`scenario_vars`** extra-var (e.g.
-`scenarios/happy-path.yml`). Relative paths resolve against **`playbook_dir`**
-(not process cwd), so EE / alternate cwd runs stay reliable. The playbook
-asserts the file exists and stays under the tests directory, then
-`include_vars` loads it. Vault stays separate (`-e @vault.yml`).
+| Artifact | Location |
+| --- | --- |
+| Scenario log | `logs/<UTC-timestamp>_<scenario>.log` |
+| Suite summary | `logs/<UTC-timestamp>_suite-summary.log` |
+| Logs from one suite | Share a timestamp prefix |
 
-From `roles/api_client/tests/`:
+Scenario logs capture the command, timestamps, output, and exit status. Suite
+summaries record each outcome. Use these files as review and handoff evidence.
 
-```bash
-cd roles/api_client/tests
+`--clean-logs`, or `CLEAR_LOGS=1`, removes existing `logs/*.log` before a suite
+run while retaining the directory and `.gitkeep`. Text cleanup strips terminal
+formatting and control characters and normalizes line endings. It does not
+redact secrets. Console output remains unchanged.
 
-./run.sh <scenario> [verbosity]
+### Direct Ansible invocation
 
-./run.sh happy-path
-./run.sh happy-path 2
-./run.sh echo-payload -vv
-./run.sh scenarios/health-no-auth.yml
-```
-
-- **scenario** — name (`happy-path`), file (`happy-path.yml`), or path
-  (`scenarios/happy-path.yml`); resolved under `scenarios/`. `run.sh` passes
-  `-e scenario_vars=scenarios/<name>.yml` (playbook loads the file).
-- **verbosity** (optional) — `0`–`5` → ansible `-v` … `-vvvvv` (`0` = quiet),
-  or ansible-style `-v` / `-vv` / … (passed through to navigator).
-- **playbook / inventory / vault / EE** — from `$PLAYBOOK` / `$INVENTORY` /
-  `$VAULT_FILE` / `$EE_IMAGE` in `env.sh`. Override via env, e.g.
-  `EE_IMAGE=localhost/ansible-ee:latest ./run.sh happy-path`.
-- **expected failure** — `EXPECTED_FAILURE=1 ./run.sh unknown-path` treats a
-  non-zero ansible exit as success (and a zero exit as failure).
-- **logging** — console shows the raw stream; a sanitized copy is written under
-  `logs/<UTC-timestamp>_<scenario>.log`. Disable with `SKIP_LOG=1`.
-
-`run.sh` sources **`env.sh`** and **`lib/log.sh`**, then runs
-**`ansible-navigator run --mode stdout`**. `env.sh` exports
-`ANSIBLE_VAULT_PASSWORD_FILE` (→ `.vault_pass`), `INVENTORY` / `PLAYBOOK` /
-`VAULT_FILE` / `LOGS_DIR`, **`EE_IMAGE`** (default
-`quay.io/ansible/creator-ee:latest` — **prefer a local tag**; creator-ee /
-community-dev-tools pulls are large), and **`EE_PULL_POLICY`** (default
-`missing`). `run.sh` always passes `--vault-password-file`, `--eei`,
-`--pp`, `--pae false`, mounts the role dir into the EE (`--eev`), and uses
-`--co=--network=host` by default so the EE can reach the host mock API.
-
-Escape hatch (same args `run.sh` builds):
+The wrappers provide execution defaults and evidence capture. From a configured
+role's tests directory, the equivalent direct invocation is:
 
 ```bash
-cd roles/api_client/tests
 source ./env.sh
 ansible-navigator run "$PLAYBOOK" -i "$INVENTORY" \
   --eei "$EE_IMAGE" --pp "$EE_PULL_POLICY" \
@@ -186,144 +242,47 @@ ansible-navigator run "$PLAYBOOK" -i "$INVENTORY" \
   --co=--network=host \
   --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
   -e @"$VAULT_FILE" \
-  -e scenario_vars=scenarios/happy-path.yml
+  -e scenario_vars=scenarios/baseline.yml
 ```
 
-Optional host-only fallback (not what `run.sh` uses):
+Adjust the container options for your environment. If the host has Ansible and
+all required dependencies, you can also run the playbook directly:
 
 ```bash
 source ./env.sh
 ansible-playbook -i "$INVENTORY" "$PLAYBOOK" \
   --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
   -e @"$VAULT_FILE" \
-  -e scenario_vars=scenarios/happy-path.yml
+  -e scenario_vars=scenarios/baseline.yml
 ```
 
-Scenario files hold **non-secret** vars (`api_path`, `api_method`, body,
-expected status/message). Credentials stay in encrypted `vault.yml`.
+## Using the framework with your own role
 
-### 4. Run the full suite (`scenario-suite.yml`)
+1. Copy the framework files listed above from `roles/api_client/tests/` into
+   your role's `tests/` directory, including `lib/log.sh` and `.gitignore`.
+2. Adapt `test.yml` for your target hosts and role assertions. The supplied
+   playbook targets localhost and loads its enclosing role by path. Preserve
+   scenario loading and check-mode handling.
+3. Set your inventory, execution environment, and container options in `env.sh`.
+4. Replace `vault.example.yml` with your credential template and run
+   `./setup-vault.sh` to create the local encrypted vault and password file.
+5. Create your scenario files and an ordered `scenario-suite.yml`. Run each
+   new case individually, then run the full suite and inspect its logs.
 
-```bash
-cd roles/api_client/tests
-./run-all.sh                 # default: scenario-suite.yml
-./run-all.sh scenario-suite.yml
-./run-all.sh --clean-logs    # delete logs/*.log first, then run suite
-```
+The reusable harness is currently distributed inside the example role. Copy
+only the framework files; provide your own role inputs, assertions, and any
+required test services. Each role owns its test directory and execution context.
 
-The manifest sets **defaults** (playbook, inventory, vault_file, verbosity) and an
-**ordered** `scenarios:` list. Each entry can override playbook / inventory /
-vault / verbosity and set `expected_failure: true` for negative cases (ansible
-must fail for that entry to count as a suite pass).
+## Worked example: API client
 
-The demo suite includes `unknown-path` (mock 404 vs expected 200) with
-`expected_failure: true`, plus `happy-path-check` for native check mode.
-Expected failure means a nonzero Ansible exit counts as a pass; it does not
-verify the specific cause of failure.
+The included `demo.scenarios.api_client` role illustrates the framework with a
+local mock REST API, encrypted credentials, normal and negative scenarios, and
+a check-mode variant.
 
-### Scenario-controlled check mode
+Follow the [API client walkthrough](docs/api-client-example.md) for setup,
+runnable commands, scenario details, and the API variable reference.
 
-Declare check mode in the scenario file itself. For example,
-`scenarios/happy-path-check.yml` contains:
-
-```yaml
-scenario_check_mode: true
-api_path: /v1/message
-api_method: GET
-api_expected_status: 200
-api_message_field: message
-api_expected_message: Hello from mock API
-```
-
-Run it individually or add its name to the suite:
-
-```bash
-./run.sh happy-path-check
-```
-
-```yaml
-scenarios:
-  - name: happy-path
-  - name: happy-path-check
-```
-
-The `-check` suffix is a naming convention. The boolean variable controls
-execution. `run.sh` already passes the scenario path to `test.yml`, so no
-additional shell flag or suite setting is needed. After loading the variables,
-the playbook applies this setting to the role:
-
-```yaml
-roles:
-  - role: "{{ playbook_dir }}/.."
-    check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
-```
-
-Omitting `scenario_check_mode`, or setting it to `false`, uses normal execution
-unless Ansible was explicitly invoked with `--check`. Use YAML booleans
-`true` and `false`, not quoted strings. The built-in `ansible_check_mode`
-reflects the CLI flag; the scenario variable selects the role's keyword setting.
-
-This uses Ansible's native module behavior. Modules that support check mode
-can predict changes; others may skip execution. The demo's `uri` request is
-skipped, so response assertions and the response summary are skipped as well.
-A passing check-mode scenario does not validate a live API response.
-
-### Adding scenarios and regression coverage
-
-Create a file in `scenarios/` with the role inputs and expected results, then
-add its name to `scenario-suite.yml`. Existing cases run again whenever you
-invoke `./run-all.sh`; adding a scenario does not require changing the scripts.
-Use a descriptive qualifier such as `-check` for variants so logs identify
-what was exercised. Store credentials separately in the local vault.
-
-Suite runs preserve the declared order, continue after failures, and return
-nonzero if any scenario fails its expected outcome. Use the scenario logs and
-suite summary as evidence when reviewing a change.
-
-### Logs
-
-| What | Where |
-| --- | --- |
-| Single run | `logs/<YYYYMMDDTHHMMSSZ>_<scenario>.log` |
-| Suite summary | `logs/<YYYYMMDDTHHMMSSZ>_suite-summary.log` |
-| Per-scenario (suite) | same timestamp prefix as the suite summary |
-
-`./run-all.sh --clean-logs` (or `CLEAR_LOGS=1`) deletes `logs/*.log` before the
-suite; `logs/` and `logs/.gitkeep` are kept. Flag may appear anywhere among args.
-
-Sanitization (log files only): UTF-8 decode with replacement, strip ANSI/CSI
-color codes, drop other control characters (keep newlines and tabs), normalize
-CRLF → LF. Console output is not rewritten.
-
-### API client variables
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `api_base_url` | `http://127.0.0.1:8765` | API root (usually from vault) |
-| `api_token` | `""` | Bearer token (**required**; from vault) |
-| `api_path` | `/v1/message` | Path appended to base URL |
-| `api_method` | `GET` | HTTP method |
-| `api_body` | `{}` | JSON body (non-GET) |
-| `api_expected_status` | `200` | Passed to `uri` `status_code` |
-| `api_message_field` | `message` | JSON field to assert when expected message set |
-| `api_expected_message` | `""` | If non-empty, assert field equals this |
-
-Without credentials the role fails with a clear assert pointing at
-`./setup-vault.sh` / `vault.example.yml`.
-
----
-
-## Reusing the harness
-
-Each role keeps a self-contained `tests/` directory. Copy the harness into
-another role, update its scenario inputs and assertions, and adjust the inventory
-and execution environment for the target. The playbook loads its enclosing role
-by path. Keep `scenario_check_mode` handling when adapting the playbook.
-
-The mock API is specific to this example and stays on the host. The execution
-environment reaches it through `NAVIGATOR_CONTAINER_OPTIONS` host networking.
-
-## Harness regression tests
+## Framework development
 
 With `ansible-playbook` installed, run from the repository root:
 
@@ -331,12 +290,6 @@ With `ansible-playbook` installed, run from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-These tests use an isolated temporary role to verify that check mode predicts
+The tests use an isolated temporary role to verify that check mode predicts
 file changes without writing, normal mode writes, the CLI check flag remains
 effective, and invalid scenario settings fail before the role runs.
-
-## Collection install (optional)
-
-To use the FQCN instead of a role path, install or link this repo as
-`ansible_collections/demo/scenarios` on `ANSIBLE_COLLECTIONS_PATH`, then set
-the playbook role to `demo.scenarios.api_client`.
