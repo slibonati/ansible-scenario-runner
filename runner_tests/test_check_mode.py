@@ -62,6 +62,27 @@ class CheckModeTests(unittest.TestCase):
     def test_invalid_setting_rejected(self):
         self.run_scenario('false', valid=False)
 
+    def test_api_banner_and_skipped_request_for_scenario_and_cli_check(self):
+        with tempfile.TemporaryDirectory(prefix='scenario-banner-') as directory:
+            role = Path(directory) / 'api_client'
+            shutil.copytree(ROOT / 'roles/api_client', role, ignore=shutil.ignore_patterns(
+                'vault.yml', '.vault_pass', '*.log', '.mock_api.*', '__pycache__'))
+            for scenario, cli_check in (('happy-path-check', False), ('happy-path', True)):
+                with self.subTest(scenario=scenario):
+                    command = ['ansible-playbook', str(role / 'tests/test.yml'), '-i', 'localhost,',
+                               '-e', json.dumps({'scenario_vars': f'scenarios/{scenario}.yml',
+                                                 'api_token': 'banner-secret-sentinel'})]
+                    if cli_check:
+                        command.append('--check')
+                    result = subprocess.run(command, capture_output=True, text=True)
+                    output = result.stdout + result.stderr
+                    self.assertEqual(result.returncode, 0, output)
+                    self.assertIn('API client configuration', output)
+                    self.assertIn('"execution_mode": "CHECK MODE"', output)
+                    self.assertIn('"check_mode": true', output)
+                    self.assertIn('No API call was made', output)
+                    self.assertNotIn('banner-secret-sentinel', output)
+
 
 if __name__ == '__main__':
     unittest.main()

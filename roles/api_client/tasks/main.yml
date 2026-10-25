@@ -1,4 +1,14 @@
 ---
+- name: API client configuration
+  ansible.builtin.debug:
+    msg:
+      execution_mode: "{{ 'CHECK MODE' if ((scenario_check_mode | default(false)) or ansible_check_mode) else 'NORMAL MODE' }}"
+      check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+      scenario: "{{ scenario_vars | default('not specified') }}"
+      api_url: "{{ api_base_url }}{{ api_path }}"
+      api_method: "{{ api_method }}"
+      expected_status: "{{ api_expected_status }}"
+
 - name: Require API credentials
   ansible.builtin.assert:
     that:
@@ -21,6 +31,11 @@
     status_code: "{{ api_expected_status }}"
     return_content: true
   register: api_response
+
+- name: Explain skipped API request
+  ansible.builtin.debug:
+    msg: "CHECK MODE: the URI module skipped the request. No API call was made; response assertions are skipped."
+  when: api_response.skipped | default(false)
 
 - name: Assert response message field when requested
   when:

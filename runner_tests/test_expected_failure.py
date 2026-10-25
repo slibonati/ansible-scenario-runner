@@ -54,6 +54,21 @@ sys.exit(subprocess.call(command))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('passed=1 failed=0', result.stdout)
 
+    def test_single_api_check_run_shows_mode_and_skipped_request(self):
+        self.prepare()
+        source = test_runner.ROOT / 'roles/api_client'
+        shutil.copy(source / 'tasks/main.yml', self.harness.parent / 'tasks/main.yml')
+        shutil.copytree(source / 'defaults', self.harness.parent / 'defaults')
+        (self.harness / 'vault.yml').write_text('{"api_token": "demo-token"}')
+        result = self.run_script('run.sh', 'happy-path-check')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"execution_mode": "CHECK MODE"', result.stdout)
+        self.assertIn('"check_mode": true', result.stdout)
+        self.assertIn('No API call was made', result.stdout)
+        logs = list((self.root / 'logs').glob('*.log'))
+        self.assertEqual(len(logs), 1)
+        self.assertIn('"execution_mode": "CHECK MODE"', logs[0].read_text())
+
     def test_api_suite_with_expected_failure(self):
         import importlib.util
         import threading
@@ -76,6 +91,9 @@ sys.exit(subprocess.call(command))
             result = self.run_script('run-all.sh')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('passed=5 failed=0', result.stdout)
+            self.assertIn('"execution_mode": "NORMAL MODE"', result.stdout)
+            self.assertIn('"execution_mode": "CHECK MODE"', result.stdout)
+            self.assertIn('No API call was made', result.stdout)
             self.assertIn('command failed as expected (unknown-path', result.stderr)
         finally:
             server.shutdown()

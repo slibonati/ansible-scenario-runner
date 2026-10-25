@@ -168,10 +168,16 @@ change it. To use the current demo default, run
 | `unknown-path` | Request a missing endpoint while the role expects HTTP 200; the suite expects failure |
 | `happy-path-check` | Apply native check mode to the role |
 
+Each run starts the role with an **API client configuration** banner showing
+`CHECK MODE` or `NORMAL MODE`, the check-mode boolean, scenario, request URL,
+HTTP method, and expected status. It does not print the API token, headers, or
+request body.
+
 The check-mode scenario sets `scenario_check_mode: true` in its own YAML file.
 Ansible skips the `uri` request in check mode. The role also skips response
 assertions and the response summary, so this case does not validate a live API
-response. Use the normal scenarios for that validation.
+response. A message explicitly confirms that no API call was made and response
+assertions were skipped. Use the normal scenarios for live API validation.
 
 The `unknown-path` scenario requests a missing endpoint while the role expects
 HTTP 200. The manifest marks that case with `expected_failure: true`, so the
