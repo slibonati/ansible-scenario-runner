@@ -1,8 +1,7 @@
 ---
-# Negative case: mock returns 404 for unknown paths; role expects 200 → playbook fails.
-# Mark expected_failure: true in scenario-suite.yml so the suite treats that as a pass.
+# Assert the expected rejection; connection and execution errors must still fail.
 api_path: /v1/does-not-exist
 api_method: GET
-api_expected_status: 200
-api_message_field: message
-api_expected_message: should-not-appear
+api_expected_status: 404
+api_message_field: error
+api_expected_message: not_found

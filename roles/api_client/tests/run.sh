@@ -11,10 +11,6 @@
 # Playbook / inventory / vault / EE come from env.sh. Override with env vars:
 #   PLAYBOOK=... INVENTORY=... VAULT_FILE=... EE_IMAGE=... ./run.sh happy-path
 #
-# Negative / expected-failure (used by run-all.sh):
-#   EXPECTED_FAILURE=1 ./run.sh unknown-path
-#   → navigator/ansible non-zero exit = success (0); zero = unexpected pass (1)
-#
 # Logging: stdout/stderr shown on console; sanitized copy under logs/
 #   LOG_FILE=/path/to.log ./run.sh happy-path   # optional explicit path
 #   SKIP_LOG=1 ./run.sh happy-path              # disable file logging
@@ -42,7 +38,6 @@ usage() {
   echo "              PLAYBOOK=/path/to.yml $0 <scenario> [verbosity]" >&2
   echo "  inventory   from \$INVENTORY; vault from \$VAULT_FILE" >&2
   echo "  EE          \$EE_IMAGE / \$EE_PULL_POLICY (see env.sh)" >&2
-  echo "  expected    EXPECTED_FAILURE=1 treats ansible failure as success" >&2
   echo "  logging     logs/<timestamp>_<scenario>.log (SKIP_LOG=1 to disable)" >&2
   echo >&2
   echo "  scenarios:" >&2
@@ -120,7 +115,13 @@ EE_PULL_POLICY="${EE_PULL_POLICY:-missing}"
 # Host network so the EE can reach the mock API on the host (127.0.0.1).
 # Override or clear: NAVIGATOR_CONTAINER_OPTIONS= ./run.sh happy-path
 NAVIGATOR_CONTAINER_OPTIONS="${NAVIGATOR_CONTAINER_OPTIONS---network=host}"
-EXPECTED_FAILURE="${EXPECTED_FAILURE:-0}"
+case "${EXPECTED_FAILURE:-0}" in
+  0|false|FALSE) ;;
+  *)
+    echo "EXPECTED_FAILURE is no longer supported; assert the expected error in Ansible instead." >&2
+    exit 2
+    ;;
+esac
 # Role dir (parent of tests/) must be visible in the EE: test.yml loads
 # "{{ playbook_dir }}/.." as the role path.
 ROLE_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
@@ -221,23 +222,11 @@ if [[ "${SKIP_LOG:-0}" == "1" ]]; then
   "${cmd[@]}"
   rc=$?
 else
-  LOG_FILE="${LOG_FILE:-$(scenario_log_path "$SCENARIO_NAME")}"
+  LOG_FILE="${LOG_FILE:-$(scenario_log_path "$SCENARIO_NAME")}" || exit 1
   run_with_sanitized_log "$LOG_FILE" "scenario=$SCENARIO_NAME" -- "${cmd[@]}"
   rc=$?
   echo "log: $LOG_FILE" >&2
 fi
 set -e
-
-# expected_failure: invert ansible outcome for the suite / caller
-case "${EXPECTED_FAILURE}" in
-  1 | true | TRUE | yes | YES)
-    if [[ "$rc" -eq 0 ]]; then
-      echo "expected_failure: ansible succeeded but failure was required ($SCENARIO_NAME)" >&2
-      exit 1
-    fi
-    echo "expected_failure: ansible failed as required ($SCENARIO_NAME, exit $rc)" >&2
-    exit 0
-    ;;
-esac
 
 exit "$rc"

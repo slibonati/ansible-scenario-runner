@@ -1,24 +1,58 @@
 # ansible-scenario-runner
 
-A lightweight execution model for scenario-based validation, built on Ansible
-playbooks, roles, variables, and native check mode. Run one scenario while
-iterating or an ordered suite for regression testing, with timestamped logs
-for each run.
+A small harness for repeatable Ansible role testing. Define inputs and expected
+results in scenario files, run one case while developing, then run an ordered
+suite for regression testing. Each run captures its output in a timestamped log.
 
 ## Motivation
 
-This started with a practical problem: development runs and role tests used
-different execution paths. Scenarios ran individually, evidence capture was
-manual, and reproducing a previous run required reconstructing its inputs.
+This runner grew out of a client project developing Ansible automation for
+disaster recovery and failover. One part of the team built the automation,
+while another consumed it through job workflows in Ansible Automation Platform
+(AAP).
 
-The runner makes the role's `tests/` directory the shared execution location.
-Scenario files declare inputs, a suite manifest declares order and expected
-outcomes, and the scripts capture results as files. The playbook, inventory,
-and scenarios live alongside the role in Git. Secrets stay local.
+That handoff made comprehensive, easily runnable tests important. Developers
+needed to exercise different inputs and failure conditions before their
+automation became part of a larger workflow. Teammates also needed a way to
+repeat those checks without reconstructing each developer's commands and setup.
+
+The runner was built to provide a common testing approach: scenario files
+describe inputs and expected results, a suite defines which cases to run, and
+consistent commands capture the output. The same scenarios support individual
+development and regression testing, with test definitions kept alongside the
+role in Git. Team-wide adoption was the intended next step: replacing individual
+testing conventions with a shared, repeatable routine.
+
+These are role-level scenario tests. Depending on what a role calls or changes,
+they can exercise integration behavior as well as individual automation logic.
+The harness makes tests repeatable; the scenarios and assertions you write
+determine how comprehensive they are. It does not test AAP workflow orchestration.
 
 Molecule was explored, but setup friction in the target environment and the
 complexity needed for this use case led to a smaller harness built directly
 on Ansible primitives.
+
+## Start here
+
+```bash
+git clone https://github.com/slibonati/ansible-scenario-runner.git
+cd ansible-scenario-runner
+```
+
+The repository includes a small API client and a local mock server so you can
+try the testing pattern without access to the original project or an AAP
+installation. The demo contains no DR or failover automation.
+
+1. Check the [prerequisites](#prerequisites).
+2. Follow the [API client walkthrough](docs/api-client-example.md) to start the
+   mock API, create a local vault, run the scenarios, and inspect the results.
+   That walkthrough uses files already included in this checkout.
+3. Read [How it works](#how-it-works) and
+   [Scenario configuration](#scenario-configuration) to understand the harness.
+4. When ready, follow [Using the framework with your own role](#using-the-framework-with-your-own-role).
+
+The runner reference below uses placeholder scenarios such as `baseline`.
+For your first run, use the walkthrough's `happy-path` example instead.
 
 ## How it works
 
@@ -63,7 +97,8 @@ scripts currently require a vault file and password file for each run.
 
 ### Prerequisites
 
-- Bash and Python 3, with PyYAML for suite manifest parsing.
+- Bash with `mapfile` support (Bash 4 or later) and Python 3, with PyYAML
+  installed for the host Python interpreter that runs the suite.
 - `ansible-navigator` and a container engine such as Podman or Docker.
 - An Ansible execution environment image containing the role's dependencies.
 - `ansible-vault` for local vault setup.
@@ -117,7 +152,7 @@ changes; others skip execution. Assertions that depend on skipped tasks must
 account for missing results. Adapted playbooks must retain the variable loading,
 validation, and role keyword if they need this behavior.
 
-### Suite manifest and expected failures
+### Suite manifest and negative scenarios
 
 `scenario-suite.yml` declares defaults and an ordered list of cases. This
 illustrative manifest assumes matching scenario files exist:
@@ -133,7 +168,6 @@ scenarios:
   - name: baseline
   - name: baseline-check
   - name: invalid-input
-    expected_failure: true
   - name: alternate-target
     scenario: scenarios/baseline.yml
     inventory: inventory-alternate.yml
@@ -147,12 +181,13 @@ scenarios:
 | `inventory` | Override the default inventory |
 | `vault_file` | Override the default vault |
 | `verbosity` | Override verbosity, from 0 to 5 |
-| `expected_failure` | A nonzero Ansible exit counts as a pass |
 
 Manifest paths resolve relative to the role's `tests/` directory unless
 absolute. Check mode belongs in the scenario variables file, not the manifest.
-Expected failure checks the exit status, not the specific cause of failure;
-an unexpected success fails that case.
+Negative scenarios must assert the specific expected error inside Ansible (for
+example, an HTTP 404 and its error body). A scenario passes only when Ansible
+exits successfully. The former `expected_failure: true` setting is rejected:
+it could also count container, authentication, and syntax errors as passes.
 
 ## Running tests and reading results
 
@@ -165,13 +200,14 @@ Run commands from your role's `tests/` directory. The examples below use
 ./run.sh baseline
 ./run.sh baseline 2
 ./run.sh scenarios/baseline.yml -vv
-EXPECTED_FAILURE=1 ./run.sh invalid-input
+./run.sh invalid-input
 ```
 
 The interface is `./run.sh <scenario> [verbosity]`. A scenario can be a name,
 filename, or path. Verbosity accepts `0`–`5` or `-v` through `-vvvvv`.
-A normal run returns Ansible's exit code. `EXPECTED_FAILURE=1` maps an Ansible
-failure to success and an unexpected success to failure.
+A run returns Ansible's exit code, or a nonzero status if log capture fails.
+The former `EXPECTED_FAILURE=1` setting is rejected; assert expected errors
+in the playbook or role instead.
 
 ### Full suite
 
@@ -182,7 +218,8 @@ failure to success and an unexpected success to failure.
 ```
 
 The suite runs in manifest order, continues after individual failures, and
-returns nonzero if any case fails its expected outcome. Add new scenario files
+returns nonzero if any case fails. The entire manifest is validated before
+any scenario runs or existing logs are cleaned. Add new scenario files
 and manifest entries to expand regression coverage without changing the scripts.
 
 ### Execution context
@@ -216,12 +253,18 @@ the playbook, inventory, vault, and verbosity passed to each scenario.
 
 | Artifact | Location |
 | --- | --- |
-| Scenario log | `logs/<UTC-timestamp>_<scenario>.log` |
-| Suite summary | `logs/<UTC-timestamp>_suite-summary.log` |
-| Logs from one suite | Share a timestamp prefix |
+| Scenario log | `logs/<run-prefix>_<scenario>_<unique-suffix>.log` |
+| Suite summary | `logs/<run-prefix>_suite-summary_<unique-suffix>.log` |
+| Logs from one suite | Share a timestamp and run-ID prefix |
+
+The run prefix contains a UTC timestamp and a unique run ID. Each generated
+log file is reserved separately so simultaneous runs or similar scenario names
+do not overwrite one another. An explicit `LOG_FILE` is caller-managed and
+appends to that path.
 
 Scenario logs capture the command, timestamps, output, and exit status. Suite
 summaries record each outcome. Use these files as review and handoff evidence.
+Failure to write a requested log fails the run.
 
 `--clean-logs`, or `CLEAR_LOGS=1`, removes existing `logs/*.log` before a suite
 run while retaining the directory and `.gitkeep`. Text cleanup strips terminal
@@ -282,14 +325,45 @@ a check-mode variant.
 Follow the [API client walkthrough](docs/api-client-example.md) for setup,
 runnable commands, scenario details, and the API variable reference.
 
-## Framework development
+## Finding your way through the code
 
-With `ansible-playbook` installed, run from the repository root:
+Start with one scenario and follow it through the harness:
+
+1. [happy-path.yml](roles/api_client/tests/scenarios/happy-path.yml) supplies
+   the inputs and expected response.
+2. [test.yml](roles/api_client/tests/test.yml) loads those variables, validates
+   the check-mode setting, and invokes the enclosing role.
+3. [tasks/main.yml](roles/api_client/tasks/main.yml) makes the API request and
+   asserts the result. This is example role logic, which you replace when
+   adopting the harness.
+4. [run.sh](roles/api_client/tests/run.sh) assembles the execution command using
+   [env.sh](roles/api_client/tests/env.sh) and captures output through
+   [lib/log.sh](roles/api_client/tests/lib/log.sh).
+5. [run-all.sh](roles/api_client/tests/run-all.sh) validates
+   [scenario-suite.yml](roles/api_client/tests/scenario-suite.yml), runs each
+   entry, and summarizes the results.
+
+## Testing the runner itself
+
+The demo suite tests the example API client. The repository's Python tests
+check the harness itself, using temporary directories and a stub navigator
+for shell-runner tests. They do not require the mock API or a container image.
+
+From the repository root, with Python 3, PyYAML, and Bash available:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
+Install `ansible-playbook` and `ansible-galaxy` on the host to run all checks.
+Without them, the corresponding tests are reported as skipped, so an `OK`
+result alone does not mean every check ran.
+
 The tests use an isolated temporary role to verify that check mode predicts
 file changes without writing, normal mode writes, the CLI check flag remains
-effective, and invalid scenario settings fail before the role runs.
+effective, and invalid scenario settings fail before the role runs. Runner
+regression tests check manifest validation, exit statuses, and log failures
+using a stub navigator. Packaging tests verify that local credentials and
+runtime logs are excluded from collection archives. Helper tests exercise mock
+API lifecycle handling, vault file permissions, and unique log allocation.
+The lifecycle tests require `flock`, `ps`, and `curl`, as does the demo launcher.

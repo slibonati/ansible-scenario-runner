@@ -9,8 +9,6 @@
 #   inventory         — override defaults.inventory
 #   vault_file        — override defaults.vault_file
 #   verbosity         — 0–5 (override defaults.verbosity)
-#   expected_failure  — if true, ansible non-zero exit is a suite pass;
-#                       ansible zero exit is a suite failure (unexpected success)
 
 defaults:
   playbook: test.yml
@@ -23,5 +21,4 @@ scenarios:
   - name: echo-payload
   - name: health-no-auth
   - name: unknown-path
-    expected_failure: true
   - name: happy-path-check

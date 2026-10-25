@@ -12,6 +12,7 @@
 #   ./setup-vault.sh
 #   ansible-vault edit vault.yml --vault-password-file .vault_pass
 set -euo pipefail
+umask 077
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TESTS_DIR"
@@ -33,6 +34,19 @@ for arg in "$@"; do
       exit 2
       ;;
   esac
+done
+
+if ! command -v ansible-vault >/dev/null 2>&1; then
+  echo "ansible-vault not found in PATH; no credential files were created" >&2
+  exit 127
+fi
+# Reject symlinks and restrict existing files as well as new ones.
+for credential in "$PASS_FILE" "$VAULT"; do
+  if [[ -L "$credential" || ( -e "$credential" && ! -f "$credential" ) ]]; then
+    echo "credential must be a regular file, not a symlink: $credential" >&2
+    exit 1
+  fi
+  if [[ -f "$credential" ]]; then chmod 600 "$credential"; fi
 done
 
 if [[ ! -f "$EXAMPLE" ]]; then
@@ -73,6 +87,9 @@ if head -n1 "$VAULT" | grep -q '^\$ANSIBLE_VAULT'; then
   exit 0
 fi
 
-ansible-vault encrypt "$VAULT" --vault-password-file "$PASS_FILE"
+if ! ansible-vault encrypt "$VAULT" --vault-password-file "$PASS_FILE"; then
+  echo "encryption failed; $VAULT may still contain plaintext (restricted to owner access)" >&2
+  exit 1
+fi
 echo "encrypted vault.yml"
 echo "edit later: ansible-vault edit vault.yml --vault-password-file .vault_pass"

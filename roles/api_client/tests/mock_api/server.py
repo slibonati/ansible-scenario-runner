@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
@@ -75,9 +77,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--instance', default='')
+    args = parser.parse_args()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"mock API listening on http://{HOST}:{PORT} (token from MOCK_API_TOKEN / default change-me)", flush=True)
     try:
+        ready_file = os.environ.get('MOCK_API_READY_FILE')
+        if ready_file and args.instance:
+            Path(ready_file).write_text(args.instance, encoding='utf-8')
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nshutting down", flush=True)

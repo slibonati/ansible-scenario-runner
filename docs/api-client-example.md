@@ -46,13 +46,37 @@ Role FQCN: `demo.scenarios.api_client`
 ## Prerequisites
 
 Install the [framework prerequisites](../README.md#prerequisites). This demo also
-uses Python 3 for the mock server and `curl` for its health check. The execution
+uses Python 3 for the mock server, `curl` for its health check, and the Linux
+utilities `flock` (util-linux) and `ps` for lifecycle locking and process checks. The execution
 environment reaches the host mock API through host networking, configured by
 `NAVIGATOR_CONTAINER_OPTIONS` in `env.sh`.
 
 The playbook loads the role by path, so collection installation is optional.
-Start from the repository root. After the vault setup step, stay in
+Start from the repository root after cloning (see [Start here](../README.md#start-here)).
+After the vault setup step, stay in
 `roles/api_client/tests/` for the remaining commands.
+
+Before starting, check that the host tools are available:
+
+```bash
+bash --version
+python3 -c 'import yaml; print("PyYAML available")'
+ansible-navigator --version
+ansible-vault --version
+curl --version
+command -v flock ps
+podman info  # use docker info if Docker is your configured engine
+```
+
+The bundled networking setup assumes the execution environment can reach the
+host's `127.0.0.1:8765` through `--network=host`. If your container engine runs
+inside a VM, that address may refer to the VM rather than your workstation;
+adapt the networking and API address before running the scenarios.
+
+The default execution environment image is `quay.io/ansible/creator-ee:latest`.
+The first run may need to pull it. To use an image already available in your
+environment, export `EE_IMAGE` before running the scripts; it must contain the
+Ansible dependencies needed by the role.
 
 ## Walkthrough
 
@@ -97,6 +121,14 @@ ansible-vault encrypt vault.yml --vault-password-file .vault_pass
 
 Edit later: `ansible-vault edit vault.yml --vault-password-file .vault_pass`
 
+The example vault already matches the mock API's default address and token.
+The vault password you enter protects the local vault; it is separate from the
+API token. The setup script creates credential files with owner-only access.
+If encryption fails, it reports the failure and leaves the restricted file
+available for correction; do not treat that file as encrypted.
+If you change `MOCK_API_TOKEN` or the server address, update the
+corresponding vault values too.
+
 ### 3. Run individual scenarios
 
 ```bash
@@ -112,7 +144,7 @@ Edit later: `ansible-vault edit vault.yml --vault-password-file .vault_pass`
 | `happy-path` | Validate the authenticated message response |
 | `echo-payload` | POST a JSON body and validate the response |
 | `health-no-auth` | Exercise the public health endpoint |
-| `unknown-path` | Expect failure for a missing endpoint |
+| `unknown-path` | Assert HTTP 404 and the missing-endpoint error body |
 | `happy-path-check` | Apply native check mode to the role |
 
 The check-mode scenario sets `scenario_check_mode: true` in its own YAML file.
@@ -120,10 +152,10 @@ Ansible skips the `uri` request in check mode. The role also skips response
 assertions and the response summary, so this case does not validate a live API
 response. Use the normal scenarios for that validation.
 
-To run the negative case individually with its expected outcome:
+To run the negative case individually:
 
 ```bash
-EXPECTED_FAILURE=1 ./run.sh unknown-path
+./run.sh unknown-path
 ```
 
 ### 4. Run the suite and review evidence
@@ -134,9 +166,16 @@ EXPECTED_FAILURE=1 ./run.sh unknown-path
 ```
 
 The second command removes existing `logs/*.log` before running. The suite
-includes all five scenarios above and marks `unknown-path` with
-`expected_failure: true`. Review the timestamped scenario logs and suite
-summary in `logs/`.
+includes all five scenarios above. `unknown-path` succeeds only when the API
+returns the expected 404 and `not_found` error; execution errors still fail.
+A successful suite ends with `passed=5 failed=0` and returns exit status 0.
+The check-mode case passes without sending an API request, as described above.
+Review the timestamped scenario logs and suite summary in `logs/`.
+
+If a case fails, open the scenario log printed by the runner. Check that the
+mock API is running (`./mock_api/start.sh status`), the vault values match it,
+and the execution environment can reach the API. A container startup or image
+pull failure is an execution failure, not an expected negative test result.
 
 See the [runner reference](../README.md#running-tests-and-reading-results) for
 verbosity, environment overrides, logging, and direct Ansible invocation.
@@ -148,6 +187,11 @@ From the tests directory:
 ```bash
 ./mock_api/start.sh stop
 ```
+
+The launcher verifies the recorded process identity before stopping it and
+waits for shutdown before restarting. Old PID-only records cannot establish
+ownership and are not used to signal a process. If upgrading from an earlier
+checkout with the mock API still running, stop it with the old launcher first.
 
 ### API client variables
 

@@ -7,7 +7,7 @@
 #   manifest       path to suite YAML (default: scenario-suite.yml under this dir)
 #
 # Sources env.sh; per-entry playbook / inventory / vault / verbosity overrides
-# and expected_failure are applied when invoking ./run.sh.
+# are applied when invoking ./run.sh.
 #
 # Logs: per-scenario under logs/<ts>_<name>.log plus logs/<ts>_suite-summary.log
 set -euo pipefail
@@ -68,23 +68,9 @@ if [[ ! -f "$MANIFEST" ]]; then
   exit 1
 fi
 
-if [[ "$CLEAN_LOGS" -eq 1 ]]; then
-  ensure_logs_dir
-  # Delete log files only; keep logs/ and logs/.gitkeep.
-  shopt -s nullglob
-  removed=("${LOGS_DIR}"/*.log)
-  shopt -u nullglob
-  if ((${#removed[@]})); then
-    rm -f "${removed[@]}"
-    echo "cleaned ${#removed[@]} log file(s) under $LOGS_DIR"
-  else
-    echo "no log files to clean under $LOGS_DIR"
-  fi
-fi
-
 # Expand suite into TSV rows (one scenario per line) for bash.
-# Columns: name, scenario, playbook, inventory, vault_file, verbosity, expected_failure
-mapfile -t SCENARIO_ROWS < <(
+# Columns: name, scenario, playbook, inventory, vault_file, verbosity
+if ! SCENARIO_DATA="$(
   python3 - "$MANIFEST" "$TESTS_DIR" <<'PY'
 import sys
 from pathlib import Path
@@ -97,8 +83,15 @@ except ImportError:
 
 manifest_path = Path(sys.argv[1])
 tests_dir = Path(sys.argv[2])
-data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-defaults = data.get("defaults") or {}
+try:
+    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+except (OSError, yaml.YAMLError) as exc:
+    sys.exit(f"invalid suite manifest: {exc}")
+if not isinstance(data, dict):
+    sys.exit("suite manifest must be a mapping")
+defaults = data.get("defaults", {})
+if not isinstance(defaults, dict):
+    sys.exit("defaults must be a mapping")
 scenarios = data.get("scenarios") or []
 if not isinstance(scenarios, list) or not scenarios:
     sys.stderr.write("scenario-suite.yml: scenarios must be a non-empty list\n")
@@ -115,17 +108,17 @@ def resolve(p: str) -> str:
         return str(path)
     return str(tests_dir / path)
 
-def truthy(v) -> str:
-    if isinstance(v, bool):
-        return "1" if v else "0"
-    s = str(v).strip().lower()
-    return "1" if s in ("1", "true", "yes", "y") else "0"
+def expected_failure(v):
+    if v is not False:
+        sys.exit("expected_failure must be false or omitted; assert the expected error in Ansible instead")
+
 
 d_playbook = as_str(defaults.get("playbook"), "test.yml")
 d_inventory = as_str(defaults.get("inventory"), "inventory.yml")
 d_vault = as_str(defaults.get("vault_file"), "vault.yml")
 d_verbosity = as_str(defaults.get("verbosity"), "0")
 
+seen = set()
 for i, entry in enumerate(scenarios):
     if not isinstance(entry, dict):
         sys.stderr.write(f"scenarios[{i}]: expected a mapping\n")
@@ -134,12 +127,20 @@ for i, entry in enumerate(scenarios):
     if not name:
         sys.stderr.write(f"scenarios[{i}]: name is required\n")
         sys.exit(1)
+    if name in seen:
+        sys.exit(f"duplicate scenario name: {name}")
+    seen.add(name)
     scenario = entry.get("scenario") or entry.get("file") or f"scenarios/{name}.yml"
     playbook = entry.get("playbook", d_playbook)
     inventory = entry.get("inventory", d_inventory)
     vault_file = entry.get("vault_file", d_vault)
     verbosity = entry.get("verbosity", d_verbosity)
-    expected = truthy(entry.get("expected_failure", False))
+    expected_failure(entry.get("expected_failure", False))
+    if str(verbosity) not in ("0", "1", "2", "3", "4", "5", "-v", "-vv", "-vvv", "-vvvv", "-vvvvv"):
+        sys.exit(f"scenarios[{i}]: invalid verbosity")
+    for value in (name, scenario, playbook, inventory, vault_file):
+        if not isinstance(value, str) or not value.strip() or any(c in value for c in "\t\r\n"):
+            sys.exit(f"scenarios[{i}]: names and paths must be non-empty single-line strings without tabs")
     row = "\t".join(
         [
             name,
@@ -148,12 +149,29 @@ for i, entry in enumerate(scenarios):
             resolve(as_str(inventory)),
             resolve(as_str(vault_file)),
             as_str(verbosity, "0"),
-            expected,
         ]
     )
     print(row)
 PY
-)
+)"; then
+  echo "suite manifest validation failed; no scenarios were run" >&2
+  exit 2
+fi
+mapfile -t SCENARIO_ROWS <<<"$SCENARIO_DATA"
+
+if [[ "$CLEAN_LOGS" -eq 1 ]]; then
+  ensure_logs_dir
+  # Delete log files only; keep logs/ and logs/.gitkeep.
+  shopt -s nullglob
+  removed=("${LOGS_DIR}"/*.log)
+  shopt -u nullglob
+  if ((${#removed[@]})); then
+    rm -f "${removed[@]}"
+    echo "cleaned ${#removed[@]} log file(s) under $LOGS_DIR"
+  else
+    echo "no log files to clean under $LOGS_DIR"
+  fi
+fi
 
 SUITE_TS="$(log_timestamp)"
 SUITE_LOG="$(suite_log_path "$SUITE_TS")"
@@ -175,17 +193,17 @@ failed=0
 declare -a RESULTS=()
 
 for row in "${SCENARIO_ROWS[@]}"; do
-  IFS=$'\t' read -r name scenario playbook inventory vault_file verbosity expected_failure <<<"$row"
+  IFS=$'\t' read -r name scenario playbook inventory vault_file verbosity <<<"$row"
 
   SCENARIO_LOG="$(scenario_log_path "$name" "$SUITE_TS")"
   echo
-  echo "=== [$name] expected_failure=${expected_failure} ==="
+  echo "=== [$name] ==="
 
   set +e
   PLAYBOOK="$playbook" \
     INVENTORY="$inventory" \
     VAULT_FILE="$vault_file" \
-    EXPECTED_FAILURE="$expected_failure" \
+    EXPECTED_FAILURE=0 \
     LOG_FILE="$SCENARIO_LOG" \
     "$TESTS_DIR/run.sh" "$scenario" "$verbosity"
   rc=$?
@@ -200,7 +218,7 @@ for row in "${SCENARIO_ROWS[@]}"; do
   fi
   RESULTS+=("$status"$'\t'"$name"$'\t'"$rc"$'\t'"$SCENARIO_LOG")
   {
-    echo "$status  name=$name  exit=$rc  expected_failure=$expected_failure"
+    echo "$status  name=$name  exit=$rc"
     echo "  log: $SCENARIO_LOG"
   } | sanitize_stream >>"$SUITE_LOG"
 done

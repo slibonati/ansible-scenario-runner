@@ -23,3 +23,10 @@ build_ignore:
   - .git
   - .gitignore
   - .venv
+  - 'roles/*/tests/vault.yml'
+  - 'roles/*/tests/.vault_pass'
+  - 'roles/*/tests/logs/*.log'
+  - 'roles/*/tests/mock_api/.mock_api.*'
+  - '**/__pycache__'
+  - '*.tar.gz'
+  - ansible-navigator.log

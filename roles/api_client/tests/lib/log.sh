@@ -12,9 +12,9 @@
 
 export LOGS_DIR="${LOGS_DIR:-${TESTS_DIR}/logs}"
 
-# ISO-ish UTC stamp safe for filenames: 20260820T212800Z
+# UTC timestamp plus a unique run identifier; suites share this prefix.
 log_timestamp() {
-  date -u +%Y%m%dT%H%M%SZ
+  python3 -c 'from datetime import datetime, timezone; import uuid; print(datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex)'
 }
 
 # Sanitize a filename fragment (scenario / suite labels).
@@ -30,17 +30,29 @@ ensure_logs_dir() {
   mkdir -p "$LOGS_DIR"
 }
 
-# Path for a single-scenario run log.
-scenario_log_path() {
-  local name="$1"
-  local ts="${2:-$(log_timestamp)}"
-  printf '%s/%s_%s.log\n' "$LOGS_DIR" "$ts" "$(log_safe_name "$name")"
+# Reserve each log atomically, including when sanitized labels collide.
+reserve_log_path() {
+  ensure_logs_dir || return 1
+  python3 - "$LOGS_DIR" "$1" <<'PYLOG'
+import os
+import sys
+import tempfile
+fd, path = tempfile.mkstemp(dir=sys.argv[1], prefix=sys.argv[2] + "_", suffix=".log")
+os.close(fd)
+print(path)
+PYLOG
 }
 
-# Path for a run-all suite summary log.
+scenario_log_path() {
+  local name="$1" ts
+  ts="${2:-$(log_timestamp)}"
+  reserve_log_path "${ts}_$(log_safe_name "$name")"
+}
+
 suite_log_path() {
-  local ts="${1:-$(log_timestamp)}"
-  printf '%s/%s_suite-summary.log\n' "$LOGS_DIR" "$ts"
+  local ts
+  ts="${1:-$(log_timestamp)}"
+  reserve_log_path "${ts}_suite-summary"
 }
 
 # Sanitize stdin → stdout (UTF-8 safe, strip ANSI + non-printables).
@@ -75,7 +87,7 @@ sys.stdout.write(sanitize(data.decode("utf-8", errors="replace")))
 # Append a short header to a log file, then run a command:
 #   - console: raw stdout/stderr (unchanged)
 #   - logfile: sanitized copy of the same stream
-# Sets global LAST_LOG_FILE. Returns the command's exit status.
+# Sets global LAST_LOG_FILE. Returns the command's exit status, or 1 on log failure.
 #
 # Usage: run_with_sanitized_log <logfile> <label> -- <command...>
 run_with_sanitized_log() {
@@ -86,36 +98,35 @@ run_with_sanitized_log() {
     shift
   fi
 
-  ensure_logs_dir
+  ensure_logs_dir || return 1
   LAST_LOG_FILE="$logfile"
 
-  # Keep errexit off in this helper so a non-zero ansible rc can be returned
-  # to the caller (set -e + return N would otherwise abort the whole script).
-  set +e
-
-  {
+  # Check each logging operation explicitly; preserve the caller's shell options.
+  if ! {
     printf '# %s\n' "$label"
     printf '# started: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '# command:'
     printf ' %q' "$@"
     printf '\n# ---\n'
-  } | sanitize_stream >>"$logfile"
+  } | sanitize_stream >>"$logfile"; then
+    echo "cannot write run log: $logfile" >&2
+    return 1
+  fi
 
-  local tmp rc
-  tmp="$(mktemp "${TMPDIR:-/tmp}/api-client-run.XXXXXX")"
-  "$@" >"$tmp" 2>&1
-  rc=$?
-
-  # Console: raw (may include ANSI if present)
-  cat "$tmp"
-  # Log file: sanitized
-  sanitize_stream <"$tmp" >>"$logfile"
+  local tmp rc=0 log_rc=0
+  tmp="$(mktemp "${TMPDIR:-/tmp}/api-client-run.XXXXXX")" || return 1
+  "$@" >"$tmp" 2>&1 || rc=$?
+  cat "$tmp" || log_rc=1
+  sanitize_stream <"$tmp" >>"$logfile" || log_rc=1
   {
     printf '# ---\n'
     printf '# finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '# exit_code: %s\n' "$rc"
-  } | sanitize_stream >>"$logfile"
-
-  rm -f "$tmp"
+  } | sanitize_stream >>"$logfile" || log_rc=1
+  rm -f "$tmp" || log_rc=1
+  if [[ "$log_rc" -ne 0 ]]; then
+    echo "failed to capture run evidence: $logfile" >&2
+    return 1
+  fi
   return "$rc"
 }

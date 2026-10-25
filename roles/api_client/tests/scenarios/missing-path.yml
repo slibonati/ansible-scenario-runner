@@ -1,6 +1,7 @@
 ---
-# Negative case: path the mock does not serve (404). Role expects 200, so
-# ansible-playbook fails — use expected_failure: true in scenario-suite.yml.
+# Assert the expected rejection; connection and execution errors must still fail.
 api_path: /v1/does-not-exist
 api_method: GET
-api_expected_status: 200
+api_expected_status: 404
+api_message_field: error
+api_expected_message: not_found
