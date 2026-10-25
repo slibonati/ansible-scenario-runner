@@ -2,12 +2,17 @@
 - name: API client configuration
   ansible.builtin.debug:
     msg:
-      execution_mode: "{{ 'CHECK MODE' if ((scenario_check_mode | default(false)) or ansible_check_mode) else 'NORMAL MODE' }}"
-      check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
-      scenario: "{{ scenario_vars | default('not specified') }}"
-      api_url: "{{ api_base_url }}{{ api_path }}"
-      api_method: "{{ api_method }}"
-      expected_status: "{{ api_expected_status }}"
+      - "================================================================"
+      - "                     API CLIENT SCENARIO"
+      - "================================================================"
+      - "  MODE            : {{ 'CHECK MODE (dry run)' if ((scenario_check_mode | default(false)) or ansible_check_mode) else 'NORMAL MODE (live requests)' }}"
+      - "----------------------------------------------------------------"
+      - "  Check mode      : {{ 'true' if ((scenario_check_mode | default(false)) or ansible_check_mode) else 'false' }}"
+      - "  Scenario        : {{ scenario_vars | default('not specified') }}"
+      - "  Request URL     : {{ api_base_url }}{{ api_path }}"
+      - "  HTTP method     : {{ api_method }}"
+      - "  Expected status : {{ api_expected_status }}"
+      - "================================================================"
 
 - name: Require API credentials
   ansible.builtin.assert:

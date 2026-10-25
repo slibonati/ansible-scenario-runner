@@ -169,7 +169,8 @@ change it. To use the current demo default, run
 | `happy-path-check` | Apply native check mode to the role |
 
 Each run starts the role with an **API client configuration** banner showing
-`CHECK MODE` or `NORMAL MODE`, the check-mode boolean, scenario, request URL,
+`CHECK MODE (dry run)` or `NORMAL MODE (live requests)` in a bordered block,
+followed by the check-mode boolean, scenario, request URL,
 HTTP method, and expected status. It does not print the API token, headers, or
 request body.
 

@@ -78,8 +78,8 @@ class CheckModeTests(unittest.TestCase):
                     output = result.stdout + result.stderr
                     self.assertEqual(result.returncode, 0, output)
                     self.assertIn('API client configuration', output)
-                    self.assertIn('"execution_mode": "CHECK MODE"', output)
-                    self.assertIn('"check_mode": true', output)
+                    self.assertIn('MODE            : CHECK MODE (dry run)', output)
+                    self.assertIn('Check mode      : true', output)
                     self.assertIn('No API call was made', output)
                     self.assertNotIn('banner-secret-sentinel', output)
 
