@@ -12,9 +12,9 @@
 
 export LOGS_DIR="${LOGS_DIR:-${TESTS_DIR}/logs}"
 
-# UTC timestamp plus a unique run identifier; suites share this prefix.
+# UTC timestamp; all logs from a suite share this prefix.
 log_timestamp() {
-  python3 -c 'from datetime import datetime, timezone; import uuid; print(datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex)'
+  date -u +%Y%m%dT%H%M%SZ
 }
 
 # Sanitize a filename fragment (scenario / suite labels).
@@ -36,10 +36,20 @@ reserve_log_path() {
   python3 - "$LOGS_DIR" "$1" <<'PYLOG'
 import os
 import sys
-import tempfile
-fd, path = tempfile.mkstemp(dir=sys.argv[1], prefix=sys.argv[2] + "_", suffix=".log")
-os.close(fd)
-print(path)
+from pathlib import Path
+
+index = 1
+while True:
+    suffix = "" if index == 1 else f"_{index}"
+    path = Path(sys.argv[1]) / f"{sys.argv[2]}{suffix}.log"
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        index += 1
+        continue
+    os.close(fd)
+    print(path.absolute())
+    break
 PYLOG
 }
 

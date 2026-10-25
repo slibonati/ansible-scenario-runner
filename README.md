@@ -274,14 +274,14 @@ the playbook, inventory, vault, and verbosity passed to each scenario.
 
 | Artifact | Location |
 | --- | --- |
-| Scenario log | `logs/<run-prefix>_<scenario>_<unique-suffix>.log` |
-| Suite summary | `logs/<run-prefix>_suite-summary_<unique-suffix>.log` |
-| Logs from one suite | Share a timestamp and run-ID prefix |
+| Scenario log | `logs/<UTC-timestamp>_<scenario>.log` |
+| Suite summary | `logs/<UTC-timestamp>_suite-summary.log` |
+| Logs from one suite | Share a UTC timestamp prefix |
 
-The run prefix contains a UTC timestamp and a unique run ID. Each generated
-log file is reserved separately so simultaneous runs or similar scenario names
-do not overwrite one another. An explicit `LOG_FILE` is caller-managed and
-appends to that path.
+For example: `20261025T234509Z_happy-path.log`. If that filename already exists,
+the runner adds `_2`, `_3`, and so on before `.log`. Files are reserved atomically
+so simultaneous runs cannot overwrite each other's logs. An explicit `LOG_FILE`
+is caller-managed and appends to that path.
 
 Scenario logs capture the command, timestamps, output, and exit status. Suite
 summaries record each outcome. Use these files as review and handoff evidence.
