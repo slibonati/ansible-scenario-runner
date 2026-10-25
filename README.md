@@ -26,6 +26,11 @@ individual development and regression testing, with test definitions kept
 alongside the role in Git. Team-wide adoption was the intended next step:
 replacing individual testing conventions with a shared, repeatable routine.
 
+The same approach also helped with client demonstrations. Instead of assembling
+commands during a call, developers could run prepared scenarios in a consistent
+way. That reduced manual steps, made demonstrations more predictable, and kept
+the focus on the automation’s behavior.
+
 These are role-level scenario tests. Depending on what a role calls or changes,
 they can exercise integration behavior as well as individual automation logic.
 The harness makes tests repeatable; the scenarios and assertions you write
