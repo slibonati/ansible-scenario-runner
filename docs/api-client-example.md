@@ -144,7 +144,7 @@ corresponding vault values too.
 | `happy-path` | Validate the authenticated message response |
 | `echo-payload` | POST a JSON body and validate the response |
 | `health-no-auth` | Exercise the public health endpoint |
-| `unknown-path` | Expect the API request task to fail with HTTP 404 and the missing-endpoint error body |
+| `unknown-path` | Request a missing endpoint while the role expects HTTP 200; the suite expects failure |
 | `happy-path-check` | Apply native check mode to the role |
 
 The check-mode scenario sets `scenario_check_mode: true` in its own YAML file.
@@ -152,19 +152,15 @@ Ansible skips the `uri` request in check mode. The role also skips response
 assertions and the response summary, so this case does not validate a live API
 response. Use the normal scenarios for that validation.
 
-The `unknown-path` scenario makes a request to a missing endpoint while the
-role expects HTTP 200. In the suite, the manifest requires `Call authenticated
-API` to fail with status 404 and the matching JSON error body. To verify that
-same expected failure in a single run:
+The `unknown-path` scenario requests a missing endpoint while the role expects
+HTTP 200. The manifest marks that case with `expected_failure: true`, so the
+nonzero command exit counts as a pass. To use the same expectation individually:
 
 ```bash
-EXPECTED_FAILURE=1 \
-EXPECTED_FAILURE_TASK='Call authenticated API' \
-EXPECTED_FAILURE_RESULT='{"status":404,"json":{"error":"not_found","path":"/v1/does-not-exist"}}' \
-./run.sh unknown-path
+EXPECTED_FAILURE=1 ./run.sh unknown-path
 ```
 
-Running `./run.sh unknown-path` without those settings returns failure, because
+Running `./run.sh unknown-path` without that setting returns failure, because
 single runs do not read the manifest. The separate `missing-path` scenario
 illustrates the alternative: accepting HTTP 404 in the role and asserting the
 error body as a normal successful test. It is not part of the default suite.
@@ -177,17 +173,18 @@ error body as a normal successful test. It is not part of the default suite.
 ```
 
 The second command removes existing `logs/*.log` before running. The suite
-includes all five scenarios above. `unknown-path` succeeds only when the API
-request task fails with the expected 404 and `not_found` error body; execution
-errors and failures at other tasks still fail the case.
+includes all five scenarios above. `unknown-path` passes when the command exits
+nonzero. This does not verify why it failed: inspect its log for the expected
+HTTP 404 rather than a connection, authentication, or container error.
 A successful suite ends with `passed=5 failed=0` and returns exit status 0.
 The check-mode case passes without sending an API request, as described above.
 Review the timestamped scenario logs and suite summary in `logs/`.
 
 If a case fails, open the scenario log printed by the runner. Check that the
 mock API is running (`./mock_api/start.sh status`), the vault values match it,
-and the execution environment can reach the API. A container startup or image
-pull failure is an execution failure, not an expected negative test result.
+and the execution environment can reach the API. For a case marked
+`expected_failure: true`, even a container startup or image pull error can count
+as a pass because only the command exit status is checked.
 
 See the [runner reference](../README.md#running-tests-and-reading-results) for
 verbosity, environment overrides, logging, and direct Ansible invocation.

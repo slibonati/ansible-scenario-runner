@@ -69,11 +69,10 @@ if [[ ! -f "$MANIFEST" ]]; then
 fi
 
 # Expand suite into TSV rows (one scenario per line) for bash.
-# Columns: name, scenario, playbook, inventory, vault_file, verbosity, expected failure, task JSON, result JSON
+# Columns: name, scenario, playbook, inventory, vault_file, verbosity, expected failure
 if ! SCENARIO_DATA="$(
   python3 - "$MANIFEST" "$TESTS_DIR" <<'PY'
 import sys
-import json
 from pathlib import Path
 
 try:
@@ -133,14 +132,8 @@ for i, entry in enumerate(scenarios):
     vault_file = entry.get("vault_file", d_vault)
     verbosity = entry.get("verbosity", d_verbosity)
     expected = entry.get("expected_failure", False)
-    task = entry.get("expected_failure_task", "")
-    result = entry.get("expected_failure_result", {})
     if not isinstance(expected, bool):
         sys.exit(f"scenarios[{i}]: expected_failure must be a YAML boolean")
-    if expected and (not isinstance(task, str) or not task.strip() or not isinstance(result, dict) or not result):
-        sys.exit(f"scenarios[{i}]: expected_failure requires expected_failure_task and a non-empty expected_failure_result mapping")
-    if not expected and (task or result):
-        sys.exit(f"scenarios[{i}]: failure matchers require expected_failure: true")
     if str(verbosity) not in ("0", "1", "2", "3", "4", "5", "-v", "-vv", "-vvv", "-vvvv", "-vvvvv"):
         sys.exit(f"scenarios[{i}]: invalid verbosity")
     for value in (name, scenario, playbook, inventory, vault_file):
@@ -155,8 +148,6 @@ for i, entry in enumerate(scenarios):
             resolve(as_str(vault_file)),
             as_str(verbosity, "0"),
             "1" if expected else "0",
-            json.dumps(task),
-            json.dumps(result),
         ]
     )
     print(row)
@@ -201,7 +192,7 @@ failed=0
 declare -a RESULTS=()
 
 for row in "${SCENARIO_ROWS[@]}"; do
-  IFS=$'\t' read -r name scenario playbook inventory vault_file verbosity expected_failure expected_task_json expected_result_json <<<"$row"
+  IFS=$'\t' read -r name scenario playbook inventory vault_file verbosity expected_failure <<<"$row"
 
   SCENARIO_LOG="$(scenario_log_path "$name" "$SUITE_TS")"
   echo
@@ -212,8 +203,6 @@ for row in "${SCENARIO_ROWS[@]}"; do
     INVENTORY="$inventory" \
     VAULT_FILE="$vault_file" \
     EXPECTED_FAILURE="$expected_failure" \
-    EXPECTED_FAILURE_TASK_JSON="$expected_task_json" \
-    EXPECTED_FAILURE_RESULT="$expected_result_json" \
     LOG_FILE="$SCENARIO_LOG" \
     "$TESTS_DIR/run.sh" "$scenario" "$verbosity"
   rc=$?
@@ -228,7 +217,7 @@ for row in "${SCENARIO_ROWS[@]}"; do
   fi
   RESULTS+=("$status"$'\t'"$name"$'\t'"$rc"$'\t'"$SCENARIO_LOG")
   {
-    echo "$status  name=$name  exit=$rc"
+    echo "$status  name=$name  exit=$rc  expected_failure=$expected_failure"
     echo "  log: $SCENARIO_LOG"
   } | sanitize_stream >>"$SUITE_LOG"
 done

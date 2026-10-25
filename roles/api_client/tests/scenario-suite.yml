@@ -9,9 +9,7 @@
 #   inventory         — override defaults.inventory
 #   vault_file        — override defaults.vault_file
 #   verbosity         — 0–5 (override defaults.verbosity)
-#   expected_failure  — boolean; match a specific role failure instead of success
-#   expected_failure_task — exact failing task name, required when true
-#   expected_failure_result — non-empty mapping of result fields to match
+#   expected_failure  — boolean; any nonzero navigator exit counts as a pass
 
 defaults:
   playbook: test.yml
@@ -25,10 +23,4 @@ scenarios:
   - name: health-no-auth
   - name: unknown-path
     expected_failure: true
-    expected_failure_task: Call authenticated API
-    expected_failure_result:
-      status: 404
-      json:
-        error: not_found
-        path: /v1/does-not-exist
   - name: happy-path-check

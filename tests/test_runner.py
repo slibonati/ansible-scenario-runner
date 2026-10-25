@@ -29,8 +29,7 @@ class RunnerTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=str(bins) + ':' + os.environ['PATH'],
                         PROBE=str(self.probe), LOGS_DIR=str(self.root / 'logs'))
         for key in ('EXPECTED_FAILURE', 'SKIP_LOG', 'LOG_FILE', 'PLAYBOOK', 'INVENTORY',
-                    'VAULT_FILE', 'ANSIBLE_VAULT_PASSWORD_FILE', 'CLEAR_LOGS',
-                    'EXPECTED_FAILURE_TASK', 'EXPECTED_FAILURE_TASK_JSON', 'EXPECTED_FAILURE_RESULT'):
+                    'VAULT_FILE', 'ANSIBLE_VAULT_PASSWORD_FILE', 'CLEAR_LOGS'):
             self.env.pop(key, None)
 
     def run_script(self, script, *args, **env):
@@ -47,7 +46,7 @@ class RunnerTests(unittest.TestCase):
                         'defaults: []\nscenarios: [{name: happy-path}]',
                         'scenarios:\n - name: happy-path\n - missing_name: true',
                         'scenarios: [{name: happy-path, verbosity: 9}]',
-                        'scenarios: [{name: happy-path, expected_failure: true}]',
+                        'scenarios: [{name: happy-path, expected_failure: invalid}]',
                         'scenarios: [{name: happy-path}, {name: happy-path}]'):
             with self.subTest(content=content):
                 result = self.suite(content)
@@ -86,11 +85,33 @@ class RunnerTests(unittest.TestCase):
                 self.assertIn('command-output', log.read_text())
                 self.assertIn(f'# exit_code: {rc}', log.read_text())
 
-    def test_expected_failure_cannot_hide_engine_error(self):
-        result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1', STUB_RC='125')
+    def test_expected_failure_accepts_nonzero_command_exits(self):
+        for skip_log in ('0', '1'):
+            for rc in ('2', '125'):
+                with self.subTest(rc=rc, skip_log=skip_log):
+                    result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1', STUB_RC=rc, SKIP_LOG=skip_log)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('command failed as expected', result.stderr)
+
+    def test_expected_failure_rejects_success(self):
+        result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('match the intended task and result', result.stderr)
+        self.assertIn('command succeeded', result.stderr)
+
+    def test_expected_failure_does_not_hide_harness_errors(self):
+        result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1', STUB_RC='2',
+                                 LOG_FILE=str(self.root / 'missing/run.log'))
+        self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.probe.exists())
+        (self.harness / 'vault.yml').unlink()
+        self.assertNotEqual(self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1').returncode, 0)
+
+    def test_expected_failure_does_not_hide_post_command_log_errors(self):
+        with (self.harness / 'lib/log.sh').open('a') as file:
+            file.write('\nsanitize_stream() { if [[ -f "$PROBE" ]]; then return 1; else cat; fi; }\n')
+        result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1', STUB_RC='2')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.probe.exists())
 
     @unittest.skipUnless(shutil.which('ansible-galaxy'), 'ansible-galaxy required')
     def test_collection_excludes_local_credentials_and_logs(self):

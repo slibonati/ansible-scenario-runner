@@ -91,6 +91,7 @@ sys.stdout.write(sanitize(data.decode("utf-8", errors="replace")))
 #
 # Usage: run_with_sanitized_log <logfile> <label> -- <command...>
 run_with_sanitized_log() {
+  LOG_CAPTURE_SUCCEEDED=0
   local logfile="$1"
   local label="$2"
   shift 2
@@ -128,5 +129,6 @@ run_with_sanitized_log() {
     echo "failed to capture run evidence: $logfile" >&2
     return 1
   fi
+  LOG_CAPTURE_SUCCEEDED=1
   return "$rc"
 }

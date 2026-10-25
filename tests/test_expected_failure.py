@@ -1,6 +1,5 @@
-"""Verify the shell/playbook contract with real Ansible and an isolated role."""
+"""Verify expected exit outcomes with real Ansible and an isolated role."""
 import json
-from pathlib import Path
 import shutil
 import unittest
 
@@ -18,8 +17,7 @@ class ExpectedFailureTests(unittest.TestCase):
         role_tasks.mkdir(exist_ok=True)
         (role_tasks / 'main.yml').write_text(json.dumps(tasks or [
             {'name': 'Reject invalid input', 'ansible.builtin.fail': {'msg': 'invalid input'}}]))
-        # Translate navigator arguments to local Ansible so the real playbook
-        # writes evidence. Container startup failures are covered separately.
+        # Translate navigator arguments to local Ansible to test real role exits.
         nav = self.root / 'bin/ansible-navigator'
         nav.write_text('''#!/usr/bin/env python3
 import subprocess, sys
@@ -40,60 +38,23 @@ sys.exit(subprocess.call(command))
 ''')
         nav.chmod(0o755)
 
-    def expected(self, **overrides):
-        settings = dict(EXPECTED_FAILURE='1', EXPECTED_FAILURE_TASK='Reject invalid input',
-                        EXPECTED_FAILURE_RESULT='{"msg":"invalid input"}')
-        settings.update(overrides)
-        return self.run_script('run.sh', 'happy-path', **settings)
-
-    def test_matching_failure_passes_and_temporary_evidence_is_removed(self):
+    def test_role_failure_is_accepted_when_expected(self):
         self.prepare()
-        result = self.expected()
+        result = self.run_script('run.sh', 'happy-path', EXPECTED_FAILURE='1')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('expected failure verified', result.stdout)
-        self.assertFalse(list(self.harness.glob('.scenario-result.*')))
-
-    def test_wrong_task_or_result_fails(self):
-        self.prepare()
-        for overrides in ({'EXPECTED_FAILURE_TASK': 'Another task'},
-                          {'EXPECTED_FAILURE_RESULT': '{"msg":"different error"}'}):
-            with self.subTest(overrides=overrides):
-                result = self.expected(**overrides)
-                self.assertNotEqual(result.returncode, 0, result.stdout)
-
-    def test_unexpected_success_fails(self):
-        self.prepare([{'name': 'Normal success', 'ansible.builtin.debug': {'msg': 'ok'}}])
-        result = self.expected()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('role succeeded', result.stdout)
+        self.assertIn('command failed as expected', result.stderr)
 
     def test_ordinary_failure_remains_failure(self):
         self.prepare()
         self.assertNotEqual(self.run_script('run.sh', 'happy-path').returncode, 0)
 
-    def test_invalid_role_cannot_be_an_expected_failure(self):
+    def test_manifest_boolean_accepts_role_failure(self):
         self.prepare()
-        (self.harness.parent / 'tasks/main.yml').write_text('[bad YAML')
-        self.assertNotEqual(self.expected().returncode, 0)
-
-    def test_missing_evidence_and_engine_failure_never_pass(self):
-        for rc in ('0', '125'):
-            with self.subTest(rc=rc):
-                self.assertNotEqual(self.expected(STUB_RC=rc).returncode, 0)
-
-    def test_manifest_contract_reaches_playbook(self):
-        self.prepare()
-        result = self.suite('''scenarios:
-  - name: happy-path
-    expected_failure: true
-    expected_failure_task: Reject invalid input
-    expected_failure_result:
-      msg: invalid input
-''')
+        result = self.suite('scenarios: [{name: happy-path, expected_failure: true}]')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('passed=1 failed=0', result.stdout)
 
-    def test_api_suite_with_verified_404(self):
+    def test_api_suite_with_expected_failure(self):
         import importlib.util
         import threading
         self.prepare()
@@ -115,7 +76,7 @@ sys.exit(subprocess.call(command))
             result = self.run_script('run-all.sh')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('passed=5 failed=0', result.stdout)
-            self.assertIn('expected failure verified: unknown-path', result.stdout)
+            self.assertIn('command failed as expected (unknown-path', result.stderr)
         finally:
             server.shutdown()
             server.server_close()

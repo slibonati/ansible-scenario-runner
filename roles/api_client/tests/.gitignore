@@ -3,5 +3,3 @@ vault.yml
 *.retry
 mock_api/.mock_api.*
 logs/*.log
-
-.scenario-result.*/

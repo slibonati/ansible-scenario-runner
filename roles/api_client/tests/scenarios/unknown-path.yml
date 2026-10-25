@@ -1,5 +1,5 @@
 ---
-# The role expects HTTP 200; the manifest requires its URI task to fail with 404.
+# The role expects HTTP 200. The manifest marks this run as expected to fail.
 api_path: /v1/does-not-exist
 api_method: GET
 api_expected_status: 200

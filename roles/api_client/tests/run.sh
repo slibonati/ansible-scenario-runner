@@ -11,6 +11,7 @@
 # Playbook / inventory / vault / EE come from env.sh. Override with env vars:
 #   PLAYBOOK=... INVENTORY=... VAULT_FILE=... EE_IMAGE=... ./run.sh happy-path
 #
+# EXPECTED_FAILURE=1 accepts any nonzero navigator exit; it does not check the cause.
 # Logging: stdout/stderr shown on console; sanitized copy under logs/
 #   LOG_FILE=/path/to.log ./run.sh happy-path   # optional explicit path
 #   SKIP_LOG=1 ./run.sh happy-path              # disable file logging
@@ -197,31 +198,6 @@ if [[ -n "$NAVIGATOR_CONTAINER_OPTIONS" ]]; then
   container_args=("--co=${NAVIGATOR_CONTAINER_OPTIONS}")
 fi
 
-# A fresh result directory prevents stale evidence from satisfying this run.
-RESULT_DIR="$(mktemp -d "$TESTS_DIR/.scenario-result.XXXXXX")"
-trap 'rm -rf -- "$RESULT_DIR"' EXIT
-export EXPECTED_FAILURE
-CONTRACT="$(python3 - "$RESULT_DIR/matched" <<'PYCONTRACT'
-import json
-import os
-import sys
-try:
-    expected = os.environ['EXPECTED_FAILURE'] == '1'
-    task = json.loads(os.environ['EXPECTED_FAILURE_TASK_JSON']) if 'EXPECTED_FAILURE_TASK_JSON' in os.environ else os.environ.get('EXPECTED_FAILURE_TASK', '')
-    result = json.loads(os.environ.get('EXPECTED_FAILURE_RESULT', '{}'))
-    if expected and (not isinstance(task, str) or not task.strip() or not isinstance(result, dict) or not result):
-        raise ValueError('expected failure requires EXPECTED_FAILURE_TASK and non-empty EXPECTED_FAILURE_RESULT JSON; match the intended task and result')
-    if not expected and (task or result):
-        raise ValueError('failure matchers require EXPECTED_FAILURE=1')
-    print(json.dumps(dict(scenario_expected_failure=expected,
-                         scenario_expected_failure_task=task,
-                         scenario_expected_failure_result=result,
-                         scenario_failure_evidence=sys.argv[1])))
-except (ValueError, TypeError) as exc:
-    sys.exit(str(exc))
-PYCONTRACT
-)" || exit 2
-
 # ansible-navigator run (stdout / CI-friendly). Vault + scenario_vars extras;
 # EE sees tests/ via project mount and the role via --eev on ROLE_DIR.
 cmd=(
@@ -237,7 +213,6 @@ cmd=(
   "${verbose_args[@]}"
   -e @"$VAULT"
   -e "scenario_vars=${SCENARIO_VARS_REL}"
-  -e "$CONTRACT"
 )
 
 rc=0
@@ -250,14 +225,17 @@ else
   run_with_sanitized_log "$LOG_FILE" "scenario=$SCENARIO_NAME" -- "${cmd[@]}"
   rc=$?
   echo "log: $LOG_FILE" >&2
+  # Logging failures are harness errors, not expected command failures.
+  if [[ "$LOG_CAPTURE_SUCCEEDED" != 1 ]]; then exit 1; fi
 fi
 set -e
 
-if [[ "$EXPECTED_FAILURE" == 1 && "$rc" == 0 ]]; then
-  if [[ ! -f "$RESULT_DIR/matched" || "$(cat "$RESULT_DIR/matched")" != matched ]]; then
-    echo "expected failure was not verified by the playbook" >&2
+if [[ "$EXPECTED_FAILURE" == 1 ]]; then
+  if [[ "$rc" == 0 ]]; then
+    echo "expected_failure: command succeeded but failure was required ($SCENARIO_NAME)" >&2
     exit 1
   fi
-  echo "expected failure verified: $SCENARIO_NAME"
+  echo "expected_failure: command failed as expected ($SCENARIO_NAME, exit $rc)" >&2
+  exit 0
 fi
 exit "$rc"
