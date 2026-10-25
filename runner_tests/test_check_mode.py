@@ -1,6 +1,6 @@
 """Exercise the real harness against a role that would create a file.
 
-Run: python3 -m unittest discover -s tests -v
+Run: python3 -m unittest discover -s runner_tests -v
 Requires ansible-playbook on PATH.
 """
 import json

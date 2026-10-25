@@ -366,14 +366,15 @@ Start with one scenario and follow it through the harness:
 
 ## Testing the runner itself
 
-The demo suite tests the example API client. The repository's Python tests
-check the harness itself, using temporary directories and a stub navigator
+The demo suite in `roles/api_client/tests/` tests the example API client.
+The Python tests in the top-level `runner_tests/` directory check the harness
+itself, using temporary directories and a stub navigator
 for shell-runner tests. They do not require the mock API or a container image.
 
 From the repository root, with Python 3, PyYAML, and Bash available:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s runner_tests -v
 ```
 
 Install `ansible-playbook` and `ansible-galaxy` on the host to run all checks.
