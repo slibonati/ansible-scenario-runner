@@ -86,7 +86,7 @@ Stdlib only (no pip). Default listen: `127.0.0.1:8765`, Bearer token
 `change-me` (override with `MOCK_API_TOKEN`).
 
 ```bash
-roles/api_client/tests/mock_api/start.sh start   # stop | status | restart
+roles/api_client/tests/mock_api/manage.sh start   # stop | status | restart
 ```
 
 Endpoints:
@@ -192,7 +192,7 @@ The check-mode case passes without sending an API request, as described above.
 Review the timestamped scenario logs and suite summary in `logs/`.
 
 If a case fails, open the scenario log printed by the runner. Check that the
-mock API is running (`./mock_api/start.sh status`), the vault values match it,
+mock API is running (`./mock_api/manage.sh status`), the vault values match it,
 and the execution environment can reach the API. For a case marked
 `expected_failure: true`, even a container startup or image pull error can count
 as a pass because only the command exit status is checked.
@@ -205,7 +205,7 @@ verbosity, environment overrides, logging, and direct Ansible invocation.
 From the tests directory:
 
 ```bash
-./mock_api/start.sh stop
+./mock_api/manage.sh stop
 ```
 
 The launcher verifies the recorded process identity before stopping it and

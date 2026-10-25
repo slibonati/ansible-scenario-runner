@@ -29,7 +29,7 @@ class HelperTests(unittest.TestCase):
                               env=self.env, capture_output=True, text=True, timeout=15)
 
     def api(self, action):
-        return self.run_script('mock_api/start.sh', action)
+        return self.run_script('mock_api/manage.sh', action)
 
     def free_port(self):
         with socket.socket() as sock:
