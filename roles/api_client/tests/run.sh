@@ -116,11 +116,9 @@ EE_PULL_POLICY="${EE_PULL_POLICY:-missing}"
 # Override or clear: NAVIGATOR_CONTAINER_OPTIONS= ./run.sh happy-path
 NAVIGATOR_CONTAINER_OPTIONS="${NAVIGATOR_CONTAINER_OPTIONS---network=host}"
 case "${EXPECTED_FAILURE:-0}" in
-  0|false|FALSE) ;;
-  *)
-    echo "EXPECTED_FAILURE is no longer supported; assert the expected error in Ansible instead." >&2
-    exit 2
-    ;;
+  0|false|FALSE) EXPECTED_FAILURE=0 ;;
+  1|true|TRUE) EXPECTED_FAILURE=1 ;;
+  *) echo "EXPECTED_FAILURE must be 0, 1, false, or true" >&2; exit 2 ;;
 esac
 # Role dir (parent of tests/) must be visible in the EE: test.yml loads
 # "{{ playbook_dir }}/.." as the role path.
@@ -199,6 +197,31 @@ if [[ -n "$NAVIGATOR_CONTAINER_OPTIONS" ]]; then
   container_args=("--co=${NAVIGATOR_CONTAINER_OPTIONS}")
 fi
 
+# A fresh result directory prevents stale evidence from satisfying this run.
+RESULT_DIR="$(mktemp -d "$TESTS_DIR/.scenario-result.XXXXXX")"
+trap 'rm -rf -- "$RESULT_DIR"' EXIT
+export EXPECTED_FAILURE
+CONTRACT="$(python3 - "$RESULT_DIR/matched" <<'PYCONTRACT'
+import json
+import os
+import sys
+try:
+    expected = os.environ['EXPECTED_FAILURE'] == '1'
+    task = json.loads(os.environ['EXPECTED_FAILURE_TASK_JSON']) if 'EXPECTED_FAILURE_TASK_JSON' in os.environ else os.environ.get('EXPECTED_FAILURE_TASK', '')
+    result = json.loads(os.environ.get('EXPECTED_FAILURE_RESULT', '{}'))
+    if expected and (not isinstance(task, str) or not task.strip() or not isinstance(result, dict) or not result):
+        raise ValueError('expected failure requires EXPECTED_FAILURE_TASK and non-empty EXPECTED_FAILURE_RESULT JSON; match the intended task and result')
+    if not expected and (task or result):
+        raise ValueError('failure matchers require EXPECTED_FAILURE=1')
+    print(json.dumps(dict(scenario_expected_failure=expected,
+                         scenario_expected_failure_task=task,
+                         scenario_expected_failure_result=result,
+                         scenario_failure_evidence=sys.argv[1])))
+except (ValueError, TypeError) as exc:
+    sys.exit(str(exc))
+PYCONTRACT
+)" || exit 2
+
 # ansible-navigator run (stdout / CI-friendly). Vault + scenario_vars extras;
 # EE sees tests/ via project mount and the role via --eev on ROLE_DIR.
 cmd=(
@@ -214,6 +237,7 @@ cmd=(
   "${verbose_args[@]}"
   -e @"$VAULT"
   -e "scenario_vars=${SCENARIO_VARS_REL}"
+  -e "$CONTRACT"
 )
 
 rc=0
@@ -229,4 +253,11 @@ else
 fi
 set -e
 
+if [[ "$EXPECTED_FAILURE" == 1 && "$rc" == 0 ]]; then
+  if [[ ! -f "$RESULT_DIR/matched" || "$(cat "$RESULT_DIR/matched")" != matched ]]; then
+    echo "expected failure was not verified by the playbook" >&2
+    exit 1
+  fi
+  echo "expected failure verified: $SCENARIO_NAME"
+fi
 exit "$rc"

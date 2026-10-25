@@ -1,7 +1,5 @@
 ---
-# Assert the expected rejection; connection and execution errors must still fail.
+# The role expects HTTP 200; the manifest requires its URI task to fail with 404.
 api_path: /v1/does-not-exist
 api_method: GET
-api_expected_status: 404
-api_message_field: error
-api_expected_message: not_found
+api_expected_status: 200

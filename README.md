@@ -17,12 +17,14 @@ across expected conditions and handled failures appropriately before it became
 part of a larger workflow. Teammates also needed a way to repeat those checks
 without reconstructing each developer’s commands and setup.
 
-The runner was built to provide a common testing approach: scenario files
-describe inputs and expected results, a suite defines which cases to run, and
-consistent commands capture the output. The same scenarios support individual
-development and regression testing, with test definitions kept alongside the
-role in Git. Team-wide adoption was the intended next step: replacing individual
-testing conventions with a shared, repeatable routine.
+The runner was built to give the team a common way to test automation. Scenario
+files define the variables for each test case. The suite manifest selects the
+cases to run and declares whether each should succeed or fail. For an expected
+failure, it also identifies the task and error result to check. The runner
+executes those tests and captures the output. The same scenarios support
+individual development and regression testing, with test definitions kept
+alongside the role in Git. Team-wide adoption was the intended next step:
+replacing individual testing conventions with a shared, repeatable routine.
 
 These are role-level scenario tests. Depending on what a role calls or changes,
 they can exercise integration behavior as well as individual automation logic.
@@ -64,7 +66,7 @@ the worked example.
 1. `run-all.sh` reads the suite manifest and calls `run.sh` in the declared order.
 2. `run.sh` invokes `ansible-navigator` with the execution context and scenario path.
 3. `test.yml` loads scenario variables and invokes the enclosing role, applying
-   the scenario's native check-mode setting.
+   the scenario's native check-mode setting and verifying any expected failure.
 4. Each run produces a timestamped log. Suite runs continue across failures
    and produce a pass/fail summary.
 
@@ -84,7 +86,7 @@ roles/<your-role>/tests/
   lib/log.sh             # log capture and text cleanup
   test.yml               # load scenario variables and invoke the role
   inventory.yml          # default target inventory
-  scenario-suite.yml     # ordered scenarios and execution overrides
+  scenario-suite.yml     # ordered cases, expected outcomes, execution overrides
   scenarios/*.yml        # role inputs, expected results, check-mode setting
   vault.example.yml      # credential template without real secrets
   setup-vault.sh         # create the local encrypted vault
@@ -135,12 +137,11 @@ Use a filename qualifier such as `-check` to make the intent visible. The
 variable controls execution; the filename is only a convention. Single runs
 and suite runs load the same setting without additional shell flags.
 
-After loading the scenario, the playbook invokes the role with:
+After loading the scenario, the playbook applies this expression to the tasks
+of the included role:
 
 ```yaml
-roles:
-  - role: "{{ playbook_dir }}/.."
-    check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
 ```
 
 Omitting the variable or setting it to `false` uses normal execution unless
@@ -169,6 +170,10 @@ scenarios:
   - name: baseline
   - name: baseline-check
   - name: invalid-input
+    expected_failure: true
+    expected_failure_task: Validate input
+    expected_failure_result:
+      msg: Invalid input
   - name: alternate-target
     scenario: scenarios/baseline.yml
     inventory: inventory-alternate.yml
@@ -182,13 +187,31 @@ scenarios:
 | `inventory` | Override the default inventory |
 | `vault_file` | Override the default vault |
 | `verbosity` | Override verbosity, from 0 to 5 |
+| `expected_failure` | YAML boolean; default `false` |
+| `expected_failure_task` | Exact task `name` that must fail; required when failure is expected |
+| `expected_failure_result` | Non-empty mapping of failure-result fields to match; required when failure is expected |
 
 Manifest paths resolve relative to the role's `tests/` directory unless
 absolute. Check mode belongs in the scenario variables file, not the manifest.
-Negative scenarios must assert the specific expected error inside Ansible (for
-example, an HTTP 404 and its error body). A scenario passes only when Ansible
-exits successfully. The former `expected_failure: true` setting is rejected:
-it could also count container, authentication, and syntax errors as passes.
+For a normal case, any unhandled failure fails the test. For an expected-failure
+case, the playbook catches a role task failure and verifies its exact task name
+and each specified result field. Fields are compared by equality; a nested
+mapping must match that entire field. Choose a specific error message or status
+and error body, rather than a generic field such as `failed: true`.
+
+The case passes only when that verification succeeds, Ansible exits cleanly,
+and the playbook writes fresh verification evidence for the runner. Unexpected
+success, a different failure, an unreachable host, a vault error, and a container
+startup failure all fail the case. A nonzero exit alone never counts as a pass.
+The matched task appears as rescued in Ansible's recap; the suite records PASS.
+
+An adapted playbook must preserve the expected-failure block/rescue validation
+and evidence-writing tasks in the supplied `test.yml`. A playbook without that
+support cannot pass a case marked `expected_failure: true`. Direct Ansible runs
+must receive the corresponding `scenario_expected_failure`,
+`scenario_expected_failure_task`, and `scenario_expected_failure_result` extra
+variables if they are to verify an expected failure; the scenario file alone
+does not select that outcome.
 
 ## Running tests and reading results
 
@@ -206,9 +229,19 @@ Run commands from your role's `tests/` directory. The examples below use
 
 The interface is `./run.sh <scenario> [verbosity]`. A scenario can be a name,
 filename, or path. Verbosity accepts `0`–`5` or `-v` through `-vvvvv`.
-A run returns Ansible's exit code, or a nonzero status if log capture fails.
-The former `EXPECTED_FAILURE=1` setting is rejected; assert expected errors
-in the playbook or role instead.
+A run returns Ansible's exit code, or a nonzero status if logging or failure
+verification fails. Single runs do not read the suite manifest. To select an
+expected failure directly, supply all three settings:
+
+```bash
+EXPECTED_FAILURE=1 \
+EXPECTED_FAILURE_TASK='Validate input' \
+EXPECTED_FAILURE_RESULT='{"msg":"Invalid input"}' \
+./run.sh invalid-input
+```
+
+Use the exact task name and result values appropriate to your role. Omitting
+the matchers is an error; the runner does not invert arbitrary exit codes.
 
 ### Full suite
 
@@ -306,7 +339,7 @@ ansible-playbook -i "$INVENTORY" "$PLAYBOOK" \
    your role's `tests/` directory, including `lib/log.sh` and `.gitignore`.
 2. Adapt `test.yml` for your target hosts and role assertions. The supplied
    playbook targets localhost and loads its enclosing role by path. Preserve
-   scenario loading and check-mode handling.
+   scenario loading, check-mode handling, and expected-failure verification.
 3. Set your inventory, execution environment, and container options in `env.sh`.
 4. Replace `vault.example.yml` with your credential template and run
    `./setup-vault.sh` to create the local encrypted vault and password file.

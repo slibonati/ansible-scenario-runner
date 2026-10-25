@@ -29,7 +29,8 @@ class RunnerTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=str(bins) + ':' + os.environ['PATH'],
                         PROBE=str(self.probe), LOGS_DIR=str(self.root / 'logs'))
         for key in ('EXPECTED_FAILURE', 'SKIP_LOG', 'LOG_FILE', 'PLAYBOOK', 'INVENTORY',
-                    'VAULT_FILE', 'ANSIBLE_VAULT_PASSWORD_FILE', 'CLEAR_LOGS'):
+                    'VAULT_FILE', 'ANSIBLE_VAULT_PASSWORD_FILE', 'CLEAR_LOGS',
+                    'EXPECTED_FAILURE_TASK', 'EXPECTED_FAILURE_TASK_JSON', 'EXPECTED_FAILURE_RESULT'):
             self.env.pop(key, None)
 
     def run_script(self, script, *args, **env):
@@ -88,7 +89,7 @@ class RunnerTests(unittest.TestCase):
     def test_expected_failure_cannot_hide_engine_error(self):
         result = self.run_script('run.sh', 'unknown-path', EXPECTED_FAILURE='1', STUB_RC='125')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('assert the expected error in Ansible', result.stderr)
+        self.assertIn('match the intended task and result', result.stderr)
         self.assertFalse(self.probe.exists())
 
     @unittest.skipUnless(shutil.which('ansible-galaxy'), 'ansible-galaxy required')

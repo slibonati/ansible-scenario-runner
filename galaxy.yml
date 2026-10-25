@@ -30,3 +30,4 @@ build_ignore:
   - '**/__pycache__'
   - '*.tar.gz'
   - ansible-navigator.log
+  - 'roles/*/tests/.scenario-result.*'

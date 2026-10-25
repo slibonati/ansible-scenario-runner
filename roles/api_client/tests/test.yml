@@ -66,6 +66,61 @@
       ansible.builtin.debug:
         msg: "Role check mode: {{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
 
-  roles:
-    - role: "{{ playbook_dir }}/.."
-      check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+  tasks:
+    - name: Validate expected failure contract
+      ansible.builtin.assert:
+        that:
+          - scenario_expected_failure | default(false) is boolean
+          - not (scenario_expected_failure | default(false)) or (scenario_expected_failure_task | default('') is string and scenario_expected_failure_task | default('') | length > 0)
+          - not (scenario_expected_failure | default(false)) or (scenario_expected_failure_result | default({}) is mapping and scenario_expected_failure_result | default({}) | length > 0)
+        fail_msg: Expected failures require a task name and non-empty result mapping.
+
+    - name: Initialize failure verification
+      ansible.builtin.set_fact:
+        _scenario_failure_matched: false
+
+    - name: Execute role and verify an expected failure
+      block:
+        - name: Invoke role
+          ansible.builtin.include_role:
+            name: "{{ playbook_dir }}/.."
+            apply:
+              check_mode: "{{ (scenario_check_mode | default(false)) or ansible_check_mode }}"
+      rescue:
+        - name: Verify the failing task
+          ansible.builtin.assert:
+            that:
+              - scenario_expected_failure | default(false)
+              - ansible_failed_task.name == scenario_expected_failure_task
+            fail_msg: The role failed unexpectedly or at a different task.
+
+        - name: Verify the failure result
+          ansible.builtin.assert:
+            that:
+              - item.key in ansible_failed_result
+              - ansible_failed_result[item.key] == item.value
+            fail_msg: The failing task did not return the expected result.
+          loop: "{{ scenario_expected_failure_result | dict2items }}"
+          loop_control:
+            label: "{{ item.key }}"
+
+        - name: Record verified failure
+          ansible.builtin.set_fact:
+            _scenario_failure_matched: true
+
+    - name: Reject unexpected success
+      ansible.builtin.assert:
+        that:
+          - not (scenario_expected_failure | default(false)) or _scenario_failure_matched
+        fail_msg: The role succeeded but this scenario required a specific failure.
+
+    - name: Write expected failure evidence for the runner
+      ansible.builtin.copy:
+        dest: "{{ scenario_failure_evidence }}"
+        content: matched
+        mode: '0600'
+      delegate_to: localhost
+      check_mode: false
+      when:
+        - scenario_expected_failure | default(false)
+        - scenario_failure_evidence is defined
