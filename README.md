@@ -1,8 +1,8 @@
 # ansible-scenario-runner
 
-A small harness for repeatable Ansible role testing. Define inputs and expected
-results in scenario files, run one case while developing, then run an ordered
-suite for regression testing. Each run captures its output in a timestamped log.
+A consistent way for teams to test Ansible automation before handing it off for
+use in larger workflows. Keep test scenarios alongside the code so developers
+and teammates can run the same checks and review the results.
 
 ## Motivation
 
