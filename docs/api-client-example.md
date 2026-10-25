@@ -82,8 +82,13 @@ Ansible dependencies needed by the role.
 
 ### 1. Start the mock API
 
-Stdlib only (no pip). Default listen: `127.0.0.1:8765`, Bearer token
-`change-me` (override with `MOCK_API_TOKEN`).
+The mock API runs at `http://127.0.0.1:8765` and uses `demo-token` as its default
+Bearer token. The example vault already contains this value, so no credential
+changes are needed to run the demo. The server uses only Python's standard
+library; no additional Python packages are needed for it.
+
+You can optionally set `MOCK_API_TOKEN` to use a different token. If you do,
+set `api_token` in your local vault to the same value.
 
 ```bash
 roles/api_client/tests/mock_api/manage.sh start   # stop | status | restart
@@ -139,6 +144,11 @@ If encryption fails, it reports the failure and leaves the restricted file
 available for correction; do not treat that file as encrypted.
 If you change `MOCK_API_TOKEN` or the server address, update the
 corresponding vault values too.
+
+If you created a local vault with an earlier checkout, pulling updates does not
+change it. To use the current demo default, run
+`ansible-vault edit vault.yml --vault-password-file .vault_pass` and set
+`api_token: demo-token`, then restart the mock API with `./mock_api/manage.sh restart`.
 
 ### 3. Run individual scenarios
 

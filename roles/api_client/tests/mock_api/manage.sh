@@ -9,7 +9,7 @@ READY_FILE="${SCRIPT_DIR}/.mock_api.ready"
 LOG_FILE="${SCRIPT_DIR}/.mock_api.log"
 HOST="${MOCK_API_HOST:-127.0.0.1}"
 PORT="${MOCK_API_PORT:-8765}"
-TOKEN="${MOCK_API_TOKEN:-change-me}"
+TOKEN="${MOCK_API_TOKEN:-demo-token}"
 ACTION="${1:-start}"
 if [[ $# -gt 1 || ! "$ACTION" =~ ^(start|stop|status|restart)$ ]]; then
   echo "usage: $0 {start|stop|status|restart}" >&2

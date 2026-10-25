@@ -10,8 +10,8 @@
 #   cp vault.example.yml vault.yml   # edit api_token / api_base_url if needed
 #   ansible-vault encrypt vault.yml --vault-password-file .vault_pass
 #
-# Mock API default Bearer token is "change-me" (see tests/mock_api/server.py).
+# Mock API default Bearer token is "demo-token" (see tests/mock_api/server.py).
 # Override the running mock with MOCK_API_TOKEN if you change api_token here.
 
 api_base_url: http://127.0.0.1:8765
-api_token: change-me
+api_token: demo-token

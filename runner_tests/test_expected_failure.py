@@ -64,13 +64,13 @@ sys.exit(subprocess.call(command))
         spec = importlib.util.spec_from_file_location('expected_failure_mock', source / 'tests/mock_api/server.py')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        module.EXPECTED_TOKEN = 'change-me'
+        module.EXPECTED_TOKEN = 'demo-token'
         server = module.ThreadingHTTPServer(('127.0.0.1', 0), module.Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             (self.harness / 'vault.yml').write_text(json.dumps({
-                'api_token': 'change-me',
+                'api_token': 'demo-token',
                 'api_base_url': f'http://127.0.0.1:{server.server_port}',
             }))
             result = self.run_script('run-all.sh')

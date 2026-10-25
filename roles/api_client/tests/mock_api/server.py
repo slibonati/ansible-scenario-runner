@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 HOST = os.environ.get("MOCK_API_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MOCK_API_PORT", "8765"))
 # Must match roles/api_client/tests/vault.example.yml → api_token
-EXPECTED_TOKEN = os.environ.get("MOCK_API_TOKEN", "change-me")
+EXPECTED_TOKEN = os.environ.get("MOCK_API_TOKEN", "demo-token")
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -81,7 +81,7 @@ def main() -> None:
     parser.add_argument('--instance', default='')
     args = parser.parse_args()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"mock API listening on http://{HOST}:{PORT} (token from MOCK_API_TOKEN / default change-me)", flush=True)
+    print(f"mock API listening on http://{HOST}:{PORT} (token from MOCK_API_TOKEN / default demo-token)", flush=True)
     try:
         ready_file = os.environ.get('MOCK_API_READY_FILE')
         if ready_file and args.instance:
