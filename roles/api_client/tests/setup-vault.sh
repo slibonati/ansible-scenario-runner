@@ -60,13 +60,36 @@ if [[ ! -f "$PASS_FILE" ]]; then
   elif [[ "$DEMO" -eq 1 ]]; then
     printf '%s\n' 'demo-vault-pass' > "$PASS_FILE"
   elif [[ -t 0 ]]; then
-    read -r -s -p "Vault password: " pw
-    echo
+    if [[ -f "$VAULT" ]] && head -n1 "$VAULT" | grep -q '^\$ANSIBLE_VAULT'; then
+      echo "An encrypted vault already exists, but its local password file is missing."
+      echo "Enter the existing vault password; this does not create a new password."
+      read -r -s -p "Existing vault password: " pw
+      echo
+    else
+      echo "Choose a new password to encrypt your local vault."
+      echo "This is separate from the demo API token, which is already configured."
+      echo "The password will be saved locally in .vault_pass (excluded from Git)."
+      echo "Nothing will appear while you type."
+      read -r -s -p "New vault password: " pw
+      echo
+      if [[ -z "$pw" ]]; then
+        echo "empty password not allowed; no credential files were created" >&2
+        exit 1
+      fi
+      read -r -s -p "Confirm vault password: " confirmation
+      echo
+      if [[ "$pw" != "$confirmation" ]]; then
+        echo "passwords do not match; no credential files were created. Run ./setup-vault.sh again." >&2
+        exit 1
+      fi
+      unset confirmation
+    fi
     if [[ -z "$pw" ]]; then
       echo "empty password not allowed" >&2
       exit 1
     fi
     printf '%s\n' "$pw" > "$PASS_FILE"
+    unset pw
   else
     echo "missing $PASS_FILE — set VAULT_PASS, use --demo, or run interactively" >&2
     exit 1

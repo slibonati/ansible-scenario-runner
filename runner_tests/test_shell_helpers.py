@@ -92,6 +92,74 @@ class HelperTests(unittest.TestCase):
         stub.chmod(0o755)
         self.env['PATH'] = str(bins) + ':' + self.env['PATH']
 
+    def interactive_vault(self, responses):
+        import pty
+        import select
+        import time
+        master, slave = pty.openpty()
+        proc = subprocess.Popen(['bash', str(self.harness / 'setup-vault.sh')],
+                                env=self.env, stdin=slave, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        os.close(slave)
+        output = b''
+        try:
+            for prompt, answer in responses:
+                deadline = time.monotonic() + 5
+                while prompt.encode() not in output:
+                    self.assertLess(time.monotonic(), deadline, output.decode())
+                    if select.select([proc.stdout], [], [], 0.1)[0]:
+                        chunk = os.read(proc.stdout.fileno(), 4096)
+                        self.assertTrue(chunk, output.decode())
+                        output += chunk
+                os.write(master, (answer + '\n').encode())
+            tail, _ = proc.communicate(timeout=5)
+            return proc.returncode, (output + tail).decode()
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+            proc.stdout.close()
+            os.close(master)
+
+    def test_new_vault_password_is_confirmed_and_not_echoed(self):
+        self.vault_stub('exit 0\n')
+        rc, output = self.interactive_vault([
+            ('New vault password: ', 'test-private-password'),
+            ('Confirm vault password: ', 'test-private-password'),
+        ])
+        self.assertEqual(rc, 0, output)
+        self.assertIn('Choose a new password', output)
+        self.assertIn('separate from the demo API token', output)
+        self.assertNotIn('test-private-password', output)
+        self.assertEqual((self.harness / '.vault_pass').read_text(), 'test-private-password\n')
+        self.assertEqual((self.harness / '.vault_pass').stat().st_mode & 0o777, 0o600)
+
+    def test_mismatched_confirmation_creates_no_credentials(self):
+        self.vault_stub('exit 0\n')
+        rc, output = self.interactive_vault([
+            ('New vault password: ', 'first'), ('Confirm vault password: ', 'different'),
+        ])
+        self.assertNotEqual(rc, 0)
+        self.assertIn('passwords do not match', output)
+        self.assertFalse((self.harness / '.vault_pass').exists())
+        self.assertFalse((self.harness / 'vault.yml').exists())
+
+    def test_empty_interactive_password_creates_no_credentials(self):
+        self.vault_stub('exit 0\n')
+        rc, output = self.interactive_vault([('New vault password: ', '')])
+        self.assertNotEqual(rc, 0)
+        self.assertIn('empty password not allowed', output)
+        self.assertFalse((self.harness / '.vault_pass').exists())
+        self.assertFalse((self.harness / 'vault.yml').exists())
+
+    def test_existing_encrypted_vault_asks_for_existing_password(self):
+        self.vault_stub('exit 0\n')
+        (self.harness / 'vault.yml').write_text('$ANSIBLE_VAULT;1.1;AES256\nfixture\n')
+        rc, output = self.interactive_vault([('Existing vault password: ', 'existing')])
+        self.assertEqual(rc, 0, output)
+        self.assertNotIn('New vault password:', output)
+        self.assertNotIn('Confirm vault password:', output)
+
     def test_encryption_failure_leaves_only_private_files(self):
         self.vault_stub('exit 1\n')
         result = self.run_script('setup-vault.sh', '--demo')

@@ -106,9 +106,20 @@ Runtime secrets live in **encrypted** `vault.yml` (gitignored), unlocked via
 ```bash
 cd roles/api_client/tests
 ./setup-vault.sh
-# prompts for a vault password, writes .vault_pass, copies the example,
+# asks you to choose and confirm a new vault password, then writes .vault_pass,
+# copies the example,
 # then runs: ansible-vault encrypt vault.yml --vault-password-file .vault_pass
 ```
+
+When prompted, **choose a new vault password**, then enter it again to confirm.
+You do not need an existing password for a fresh checkout. Nothing appears as
+you type. The demo API token is already configured in the example vault and
+is separate from this password. If the entries differ, the script stops without
+creating credential files; run it again to retry.
+
+Later runs reuse `.vault_pass` without prompting. If an encrypted `vault.yml`
+already exists but `.vault_pass` is missing, the script asks for that vault's
+existing password instead.
 
 Manual equivalent, from the same tests directory:
 
