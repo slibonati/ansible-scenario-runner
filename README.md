@@ -11,10 +11,11 @@ disaster recovery and failover. One part of the team built the automation,
 while another consumed it through job workflows in Ansible Automation Platform
 (AAP).
 
-That handoff made comprehensive, easily runnable tests important. Developers
-needed to exercise different inputs and failure conditions before their
-automation became part of a larger workflow. Teammates also needed a way to
-repeat those checks without reconstructing each developer's commands and setup.
+That handoff made it important to have thorough tests that anyone on the team
+could run. Developers needed to verify that their automation behaved correctly
+across expected conditions and handled failures appropriately before it became
+part of a larger workflow. Teammates also needed a way to repeat those checks
+without reconstructing each developer’s commands and setup.
 
 The runner was built to provide a common testing approach: scenario files
 describe inputs and expected results, a suite defines which cases to run, and
