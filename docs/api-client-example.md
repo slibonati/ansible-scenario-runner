@@ -204,11 +204,16 @@ The second command removes existing `logs/*.log` before running. The suite
 includes all five scenarios above. `unknown-path` passes when the command exits
 nonzero. This does not verify why it failed: inspect its log for the expected
 HTTP 404 rather than a connection, authentication, or container error.
-The suite summary labels `unknown-path` as `EXPECTED FAIL` and reports:
+The suite summary shows the actual outcomes, marking the expected failure:
 
 ```text
+PASS happy-path
+PASS echo-payload
+PASS health-no-auth
+FAIL unknown-path (expected)
+PASS happy-path-check
+
 passed=4 failed=1
-expected_failures=1 unexpected_outcomes=0
 ```
 
 The failed run remains visible in the count. The suite returns exit status 0

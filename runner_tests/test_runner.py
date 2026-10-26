@@ -67,17 +67,27 @@ class RunnerTests(unittest.TestCase):
         self.env['STUB_RC'] = '2'
         result = self.suite(manifest)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('EXPECTED FAIL', result.stdout)
+        self.assertIn('FAIL unknown-path (expected)', result.stdout)
         self.assertIn('passed=0 failed=1', result.stdout)
-        self.assertIn('expected_failures=1 unexpected_outcomes=0', result.stdout)
+        self.assertNotIn('unexpected_outcomes=', result.stdout)
         summary = next((self.root / 'logs').glob('*suite-summary.log')).read_text()
         self.assertIn('# failed: 1', summary)
-        self.assertIn('# expected_failures: 1', summary)
+        self.assertIn('FAIL unknown-path (expected)', summary)
         self.env['STUB_RC'] = '0'
         result = self.suite(manifest)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('passed=0 failed=1', result.stdout)
-        self.assertIn('expected_failures=0 unexpected_outcomes=1', result.stdout)
+        self.assertIn('passed=1 failed=0', result.stdout)
+        self.assertIn('PASS unknown-path (unexpected—failure expected)', result.stdout)
+
+    def test_suite_continues_after_unexpected_success_and_preflight_failure(self):
+        result = self.suite('scenarios: [{name: unknown-path, expected_failure: true}, {name: happy-path}]')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('passed=2 failed=0', result.stdout)
+        self.assertEqual(len(self.probe.read_text().splitlines()), 2)
+        result = self.suite('scenarios: [{name: missing-file, expected_failure: true}, {name: happy-path}]')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('FAIL missing-file (runner error)', result.stdout)
+        self.assertIn('passed=1 failed=1', result.stdout)
 
     def test_log_failure_prevents_execution(self):
         result = self.run_script('run.sh', 'happy-path', LOG_FILE=str(self.root / 'missing/run.log'))

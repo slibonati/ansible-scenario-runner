@@ -243,13 +243,17 @@ This uses the same exit-status rule as `expected_failure: true` in the manifest.
 ./run-all.sh --clean-logs
 ```
 
-The suite runs in manifest order and continues after individual failures.
-The summary labels an expected command failure `EXPECTED FAIL` and includes it
-in `failed`, with a separate `expected_failures` count. `FAIL` denotes an
-unexpected outcome, including unexpected success or a runner error; these also
-count toward `failed`. The suite returns nonzero only when `unexpected_outcomes`
-is greater than zero. Thus the demo reports `passed=4 failed=1` while exiting
-successfully because its one failure was expected. The entire manifest is validated before
+The suite runs every case in manifest order without stopping for individual
+failures. The summary counts successful runs as `passed` and failed runs as
+`failed`, whether or not failure was expected. Expected failures are labelled
+`FAIL <name> (expected)`. An unexpected success is labelled
+`PASS <name> (unexpected—failure expected)` and still counts as passed.
+Runner errors are labelled `FAIL <name> (runner error)` and count as failed.
+The suite returns nonzero if a result differs from its expected outcome or a
+runner error occurs. Thus the demo reports `passed=4 failed=1` and exits
+successfully because its one failure was expected.
+
+The entire manifest is validated before
 any scenario runs or existing logs are cleaned. Add new scenario files
 and manifest entries to expand regression coverage without changing the scripts.
 

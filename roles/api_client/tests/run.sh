@@ -230,6 +230,12 @@ else
 fi
 set -e
 
+# Private suite handoff: report the command exit only after logging succeeds.
+# Preflight/logging failures leave no result, so they cannot become expected passes.
+if [[ -n "${_SCENARIO_RESULT_FILE:-}" ]]; then
+  printf '%s\n' "$rc" >"$_SCENARIO_RESULT_FILE"
+fi
+
 if [[ "$EXPECTED_FAILURE" == 1 ]]; then
   if [[ "$rc" == 0 ]]; then
     echo "expected_failure: command succeeded but failure was required ($SCENARIO_NAME)" >&2
