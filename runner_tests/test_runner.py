@@ -114,7 +114,7 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(self.probe.exists())
 
     def test_log_failure_after_execution_is_reported(self):
-        # First sanitizer writes the header; subsequent calls fail.
+        # Simulate a sanitizer failure after the command has executed.
         with (self.harness / 'lib/log.sh').open('a') as file:
             file.write('\nsanitize_stream() { if [[ -f "$PROBE" ]]; then return 1; else cat; fi; }\n')
         result = self.run_script('run.sh', 'happy-path')
@@ -128,8 +128,7 @@ class RunnerTests(unittest.TestCase):
                 log = self.root / f'run-{rc}.log'
                 result = self.run_script('run.sh', 'happy-path', STUB_RC=str(rc), LOG_FILE=str(log))
                 self.assertEqual(result.returncode, rc, result.stderr)
-                self.assertIn('command-output', log.read_text())
-                self.assertIn(f'# exit_code: {rc}', log.read_text())
+                self.assertEqual(log.read_text(), 'command-output\n')
 
     def test_expected_failure_accepts_nonzero_command_exits(self):
         for skip_log in ('0', '1'):

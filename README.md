@@ -311,8 +311,11 @@ the runner adds `_2`, `_3`, and so on before `.log`. Files are reserved atomical
 so simultaneous runs cannot overwrite each other's logs. An explicit `LOG_FILE`
 is caller-managed and appends to that path.
 
-Scenario logs capture the command, timestamps, output, and exit status. Suite
-summaries record each outcome. Use these files as review and handoff evidence.
+Scenario logs contain only cleaned command output, including Ansible's role
+banner, task results, errors, and recap. The harness adds no command header,
+timestamps, or exit-status footer inside these files. Scenario names and UTC
+timestamps remain in the filenames; suite bookkeeping stays in the separate
+suite summary. Use these files as review and handoff evidence.
 Failure to write a requested log fails the run.
 
 `--clean-logs`, or `CLEAR_LOGS=1`, removes existing `logs/*.log` before a suite

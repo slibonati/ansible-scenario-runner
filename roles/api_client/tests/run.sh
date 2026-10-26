@@ -222,7 +222,7 @@ if [[ "${SKIP_LOG:-0}" == "1" ]]; then
   rc=$?
 else
   LOG_FILE="${LOG_FILE:-$(scenario_log_path "$SCENARIO_NAME")}" || exit 1
-  run_with_sanitized_log "$LOG_FILE" "scenario=$SCENARIO_NAME" -- "${cmd[@]}"
+  run_with_sanitized_log "$LOG_FILE" -- "${cmd[@]}"
   rc=$?
   echo "log: $LOG_FILE" >&2
   # Logging failures are harness errors, not expected command failures.

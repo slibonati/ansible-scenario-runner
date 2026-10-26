@@ -113,17 +113,16 @@ sys.stdout.write(sanitize(data.decode("utf-8", errors="replace")))
 '
 }
 
-# Append a short header to a log file, then run a command:
+# Run a command and capture its output without adding a header or footer:
 #   - console: raw stdout/stderr (unchanged)
 #   - logfile: sanitized copy of the same stream
 # Sets global LAST_LOG_FILE. Returns the command's exit status, or 1 on log failure.
 #
-# Usage: run_with_sanitized_log <logfile> <label> -- <command...>
+# Usage: run_with_sanitized_log <logfile> -- <command...>
 run_with_sanitized_log() {
   LOG_CAPTURE_SUCCEEDED=0
   local logfile="$1"
-  local label="$2"
-  shift 2
+  shift
   if [[ "${1:-}" == "--" ]]; then
     shift
   fi
@@ -131,14 +130,8 @@ run_with_sanitized_log() {
   ensure_logs_dir || return 1
   LAST_LOG_FILE="$logfile"
 
-  # Check each logging operation explicitly; preserve the caller's shell options.
-  if ! {
-    printf '# %s\n' "$label"
-    printf '# started: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '# command:'
-    printf ' %q' "$@"
-    printf '\n# ---\n'
-  } | sanitize_stream >>"$logfile"; then
+  # Check the destination before executing, without adding anything to the log.
+  if ! : >>"$logfile"; then
     echo "cannot write run log: $logfile" >&2
     return 1
   fi
@@ -148,11 +141,6 @@ run_with_sanitized_log() {
   "$@" >"$tmp" 2>&1 || rc=$?
   cat "$tmp" || log_rc=1
   sanitize_stream <"$tmp" >>"$logfile" || log_rc=1
-  {
-    printf '# ---\n'
-    printf '# finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '# exit_code: %s\n' "$rc"
-  } | sanitize_stream >>"$logfile" || log_rc=1
   rm -f "$tmp" || log_rc=1
   if [[ "$log_rc" -ne 0 ]]; then
     echo "failed to capture run evidence: $logfile" >&2
