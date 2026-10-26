@@ -9,18 +9,22 @@ the team can run them and review the results.
 This runner grew out of a client project developing Ansible automation for
 disaster recovery and business continuity. One part of the team built the
 automation, while another incorporated it into workflows in Ansible Automation
-Platform (AAP). That handoff called for thorough tests that anyone on the team
-could run consistently.
+Platform (AAP). Developers needed a practical way to test their work thoroughly
+and make those tests repeatable by teammates.
 
-Keeping the collection and everything needed to develop, test, and demonstrate
-its roles together in Git eliminated a separate development directory.
-Team-wide adoption would give everyone a shared setup and testing routine,
-replacing individual conventions.
+The aim was to bring day-to-day development and testing together in the role’s
+conventional `tests/` directory. Scenarios could be developed there, kept alongside
+the automation in Git, and reused without maintaining a separate set of
+development commands. A developer could run one scenario while making changes,
+then run an ordered suite to check existing behavior.
 
-Prepared scenarios also made client demonstrations more predictable, reducing
-the need to assemble commands while presenting. Clean log files made it easier to
-collect results from the development environment and share evidence in
-Confluence, regardless of the terminal or file-transfer tools team members used.
+Capturing clean, readable output was equally important. Test results had to be
+collected and uploaded to Confluence as evidence. Producing log files as part of
+each run made that handoff easier, while prepared scenarios also made client
+demonstrations more predictable.
+
+Together, these conventions offered a shared testing routine that the team could
+adopt in place of individual approaches.
 
 ## Start here
 
