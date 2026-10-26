@@ -12,6 +12,10 @@ while another consumed it through job workflows in Ansible Automation Platform
 (AAP). That handoff called for thorough tests that anyone on the team could run
 consistently.
 
+The goal was to keep the collection and everything needed to develop, test,
+and demonstrate its roles together in Git, instead of maintaining a separate
+development directory. That gave the team one shared setup to work from.
+
 Prepared scenarios also made client demonstrations more predictable, reducing
 the need to assemble commands during a call. Clean log files made it easier to
 collect results from the development environment and share evidence in
