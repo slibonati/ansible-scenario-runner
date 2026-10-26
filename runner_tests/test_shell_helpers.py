@@ -212,8 +212,8 @@ suite_log_path fixed
         self.assertEqual(result.returncode, 0, result.stderr)
         paths = result.stdout.splitlines()
         self.assertEqual([Path(path).name for path in paths], [
-            'fixed_a_b.log', 'fixed_a_b_2.log', 'fixed_suite-summary.log',
-            'fixed_suite-summary_2.log', 'fixed_suite-summary_3.log',
+            'a_b_fixed.log', 'a_b_fixed_2.log', 'suite-summary_fixed.log',
+            'suite-summary_fixed_2.log', 'suite-summary_fixed_3.log',
         ])
         for path in paths:
             self.assertTrue(Path(path).exists())
@@ -222,7 +222,7 @@ suite_log_path fixed
     def test_concurrent_log_reservations_preserve_existing_content(self):
         from concurrent.futures import ThreadPoolExecutor
         logs = self.harness / 'logs'
-        (logs / 'fixed_happy-path.log').write_text('previous run')
+        (logs / 'happy-path_fixed.log').write_text('previous run')
         def reserve(_):
             result = subprocess.run(['bash', '-c',
                 'source "$1/env.sh"; source "$1/lib/log.sh"; scenario_log_path happy-path fixed',
@@ -231,5 +231,5 @@ suite_log_path fixed
             return Path(result.stdout.strip()).name
         with ThreadPoolExecutor(max_workers=4) as pool:
             names = list(pool.map(reserve, range(8)))
-        self.assertEqual(set(names), {f'fixed_happy-path_{i}.log' for i in range(2, 10)})
-        self.assertEqual((logs / 'fixed_happy-path.log').read_text(), 'previous run')
+        self.assertEqual(set(names), {f'happy-path_fixed_{i}.log' for i in range(2, 10)})
+        self.assertEqual((logs / 'happy-path_fixed.log').read_text(), 'previous run')

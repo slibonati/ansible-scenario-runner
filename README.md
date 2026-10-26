@@ -31,6 +31,12 @@ commands during a call, developers could run prepared scenarios in a consistent
 way. That reduced manual steps, made demonstrations more predictable, and kept
 the focus on the automation’s behavior.
 
+Capturing test evidence was another practical need. Results had to be collected
+from the development environment and uploaded to Confluence. Saving each run’s
+output and the suite summary in a log directory provided a consistent set of
+files to transfer and share, regardless of which terminal or file-transfer tool
+a team member used.
+
 These are role-level scenario tests. Depending on what a role calls or changes,
 they can exercise integration behavior as well as individual automation logic.
 The harness makes tests repeatable; the scenarios and assertions you write
@@ -296,11 +302,11 @@ networking setup.
 
 | Artifact | Location |
 | --- | --- |
-| Scenario log | `logs/<UTC-timestamp>_<scenario>.log` |
-| Suite summary | `logs/<UTC-timestamp>_suite-summary.log` |
-| Logs from one suite | Share a UTC timestamp prefix |
+| Scenario log | `logs/<scenario>_<UTC-timestamp>.log` |
+| Suite summary | `logs/suite-summary_<UTC-timestamp>.log` |
+| Logs from one suite | Share a UTC timestamp |
 
-For example: `20261025T234509Z_happy-path.log`. If that filename already exists,
+For example: `happy-path_20261025T234509Z.log`. If that filename already exists,
 the runner adds `_2`, `_3`, and so on before `.log`. Files are reserved atomically
 so simultaneous runs cannot overwrite each other's logs. An explicit `LOG_FILE`
 is caller-managed and appends to that path.

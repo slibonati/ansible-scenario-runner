@@ -12,7 +12,7 @@
 
 export LOGS_DIR="${LOGS_DIR:-${TESTS_DIR}/logs}"
 
-# UTC timestamp; all logs from a suite share this prefix.
+# UTC timestamp; all logs from a suite share this timestamp.
 log_timestamp() {
   date -u +%Y%m%dT%H%M%SZ
 }
@@ -56,13 +56,13 @@ PYLOG
 scenario_log_path() {
   local name="$1" ts
   ts="${2:-$(log_timestamp)}"
-  reserve_log_path "${ts}_$(log_safe_name "$name")"
+  reserve_log_path "$(log_safe_name "$name")_${ts}"
 }
 
 suite_log_path() {
   local ts
   ts="${1:-$(log_timestamp)}"
-  reserve_log_path "${ts}_suite-summary"
+  reserve_log_path "suite-summary_${ts}"
 }
 
 # Sanitize stdin → stdout (UTF-8 safe, strip ANSI + non-printables).

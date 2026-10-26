@@ -68,7 +68,7 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn('Pull policy', banner)
         self.assertNotIn('--network=host', banner)
         self.assertNotIn('vault', banner.lower())
-        summary = next((self.root / 'logs').glob('*suite-summary.log')).read_text()
+        summary = next((self.root / 'logs').glob('suite-summary_*.log')).read_text()
         self.assertIn('SCENARIO SUITE', summary)
         self.assertIn('Execution image : localhost/review-ee:test', summary)
 
@@ -89,7 +89,7 @@ class RunnerTests(unittest.TestCase):
         self.assertIn('FAIL unknown-path (expected)', result.stdout)
         self.assertIn('passed=0 failed=1', result.stdout)
         self.assertNotIn('unexpected_outcomes=', result.stdout)
-        summary = next((self.root / 'logs').glob('*suite-summary.log')).read_text()
+        summary = next((self.root / 'logs').glob('suite-summary_*.log')).read_text()
         self.assertIn('# failed: 1', summary)
         self.assertIn('FAIL unknown-path (expected)', summary)
         self.env['STUB_RC'] = '0'

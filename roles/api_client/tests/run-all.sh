@@ -9,7 +9,7 @@
 # Sources env.sh; per-entry playbook / inventory / vault / verbosity overrides
 # are applied when invoking ./run.sh.
 #
-# Logs: per-scenario under logs/<ts>_<name>.log plus logs/<ts>_suite-summary.log
+# Logs: per-scenario under logs/<name>_<ts>.log plus logs/suite-summary_<ts>.log
 set -euo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

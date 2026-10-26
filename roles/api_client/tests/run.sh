@@ -39,7 +39,7 @@ usage() {
   echo "              PLAYBOOK=/path/to.yml $0 <scenario> [verbosity]" >&2
   echo "  inventory   from \$INVENTORY; vault from \$VAULT_FILE" >&2
   echo "  EE          \$EE_IMAGE / \$EE_PULL_POLICY (see env.sh)" >&2
-  echo "  logging     logs/<timestamp>_<scenario>.log (SKIP_LOG=1 to disable)" >&2
+  echo "  logging     logs/<scenario>_<timestamp>.log (SKIP_LOG=1 to disable)" >&2
   echo >&2
   echo "  scenarios:" >&2
   local f
