@@ -62,6 +62,23 @@ class RunnerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('passed=0 failed=2', result.stdout)
 
+    def test_suite_expected_failure_counts_and_unexpected_success(self):
+        manifest = 'scenarios: [{name: unknown-path, expected_failure: true}]'
+        self.env['STUB_RC'] = '2'
+        result = self.suite(manifest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('EXPECTED FAIL', result.stdout)
+        self.assertIn('passed=0 failed=1', result.stdout)
+        self.assertIn('expected_failures=1 unexpected_outcomes=0', result.stdout)
+        summary = next((self.root / 'logs').glob('*suite-summary.log')).read_text()
+        self.assertIn('# failed: 1', summary)
+        self.assertIn('# expected_failures: 1', summary)
+        self.env['STUB_RC'] = '0'
+        result = self.suite(manifest)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('passed=0 failed=1', result.stdout)
+        self.assertIn('expected_failures=0 unexpected_outcomes=1', result.stdout)
+
     def test_log_failure_prevents_execution(self):
         result = self.run_script('run.sh', 'happy-path', LOG_FILE=str(self.root / 'missing/run.log'))
         self.assertNotEqual(result.returncode, 0)

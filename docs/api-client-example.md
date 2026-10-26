@@ -204,7 +204,15 @@ The second command removes existing `logs/*.log` before running. The suite
 includes all five scenarios above. `unknown-path` passes when the command exits
 nonzero. This does not verify why it failed: inspect its log for the expected
 HTTP 404 rather than a connection, authentication, or container error.
-A successful suite ends with `passed=5 failed=0` and returns exit status 0.
+The suite summary labels `unknown-path` as `EXPECTED FAIL` and reports:
+
+```text
+passed=4 failed=1
+expected_failures=1 unexpected_outcomes=0
+```
+
+The failed run remains visible in the count. The suite returns exit status 0
+because that failure was expected and there were no unexpected outcomes.
 The check-mode case passes without sending an API request, as described above.
 Review the timestamped scenario logs and suite summary in `logs/`.
 

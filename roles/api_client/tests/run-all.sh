@@ -189,6 +189,8 @@ echo "suite log: $SUITE_LOG"
 
 passed=0
 failed=0
+expected_failures=0
+unexpected_outcomes=0
 declare -a RESULTS=()
 
 for row in "${SCENARIO_ROWS[@]}"; do
@@ -208,16 +210,21 @@ for row in "${SCENARIO_ROWS[@]}"; do
   rc=$?
   set -e
 
-  if [[ "$rc" -eq 0 ]]; then
+  if [[ "$rc" -eq 0 && "$expected_failure" == 1 ]]; then
+    status="EXPECTED FAIL"
+    ((failed++)) || true
+    ((expected_failures++)) || true
+  elif [[ "$rc" -eq 0 ]]; then
     status="PASS"
     ((passed++)) || true
   else
     status="FAIL"
     ((failed++)) || true
+    ((unexpected_outcomes++)) || true
   fi
   RESULTS+=("$status"$'\t'"$name"$'\t'"$rc"$'\t'"$SCENARIO_LOG")
   {
-    echo "$status  name=$name  exit=$rc  expected_failure=$expected_failure"
+    echo "$status  name=$name  runner_exit=$rc  expected_failure=$expected_failure"
     echo "  log: $SCENARIO_LOG"
   } | sanitize_stream >>"$SUITE_LOG"
 done
@@ -227,18 +234,21 @@ done
   echo "# finished: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "# passed: $passed"
   echo "# failed: $failed"
+  echo "# expected_failures: $expected_failures"
+  echo "# unexpected_outcomes: $unexpected_outcomes"
 } | sanitize_stream >>"$SUITE_LOG"
 
 echo
 echo "=== suite summary ==="
 for line in "${RESULTS[@]}"; do
   IFS=$'\t' read -r status name rc slog <<<"$line"
-  printf '  %-4s %s (exit %s)\n' "$status" "$name" "$rc"
+  printf '  %-13s %s\n' "$status" "$name"
 done
 echo "passed=$passed failed=$failed"
+echo "expected_failures=$expected_failures unexpected_outcomes=$unexpected_outcomes"
 echo "suite log: $SUITE_LOG"
 
-if [[ "$failed" -gt 0 ]]; then
+if [[ "$unexpected_outcomes" -gt 0 ]]; then
   exit 1
 fi
 exit 0
