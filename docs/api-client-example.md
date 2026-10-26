@@ -200,6 +200,10 @@ error body as a normal successful test. It is not part of the default suite.
 ./run-all.sh --clean-logs
 ```
 
+Each run opens with a **SCENARIO SUITE** banner showing the manifest, number of
+scenarios, execution image, and log directory. No credential values are shown.
+The banner is also captured in the suite summary log.
+
 The second command removes existing `logs/*.log` before running. The suite
 includes all five scenarios above. `unknown-path` passes when the command exits
 nonzero. This does not verify why it failed: inspect its log for the expected

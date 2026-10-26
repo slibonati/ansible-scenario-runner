@@ -243,6 +243,10 @@ This uses the same exit-status rule as `expected_failure: true` in the manifest.
 ./run-all.sh --clean-logs
 ```
 
+Before the first scenario, a short banner shows the manifest, scenario count,
+execution image, and log directory for that run. It uses the effective values,
+including environment overrides, and is also saved in the suite summary log.
+
 The suite runs every case in manifest order without stopping for individual
 failures. The summary counts successful runs as `passed` and failed runs as
 `failed`, whether or not failure was expected. Expected failures are labelled
@@ -267,8 +271,6 @@ and manifest entries to expand regression coverage without changing the scripts.
 | `VAULT_FILE` | Encrypted variables file |
 | `ANSIBLE_VAULT_PASSWORD_FILE` | Local password-file path, default `.vault_pass` |
 | `EE_IMAGE` | Execution environment image |
-| `EE_PULL_POLICY` | Image pull policy, default `missing` |
-| `NAVIGATOR_CONTAINER_OPTIONS` | Container options; bundled default is `--network=host` |
 | `LOGS_DIR` | Output directory, default `logs/` |
 | `LOG_FILE` | Explicit single-run log path |
 | `SKIP_LOG` | Set to `1` to disable scenario log capture |
@@ -283,6 +285,12 @@ PLAYBOOK=alternate-test.yml INVENTORY=alternate-inventory.yml ./run.sh baseline
 The bundled image default is `quay.io/ansible/creator-ee:latest`. Select an image
 appropriate for your role. Suite manifest defaults and entry overrides determine
 the playbook, inventory, vault, and verbosity passed to each scenario.
+
+The pull policy and container options remain runtime defaults in
+[`env.sh`](roles/api_client/tests/env.sh); you normally do not need to change
+them for the demo. They are omitted from the suite banner. The
+[walkthrough](docs/api-client-example.md#prerequisites) explains the demo's
+networking setup.
 
 ### Logs
 

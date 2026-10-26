@@ -184,8 +184,17 @@ ensure_logs_dir
   echo "# ---"
 } | sanitize_stream >"$SUITE_LOG"
 
-echo "suite: $MANIFEST (${#SCENARIO_ROWS[@]} scenarios)"
-echo "suite log: $SUITE_LOG"
+{
+  echo "================================================================"
+  echo "                       SCENARIO SUITE"
+  echo "================================================================"
+  printf '  Manifest        : %s\n' "$MANIFEST"
+  printf '  Scenarios       : %s\n' "${#SCENARIO_ROWS[@]}"
+  printf '  Execution image : %s\n' "$EE_IMAGE"
+  printf '  Logs directory  : %s\n' "$LOGS_DIR"
+  echo "================================================================"
+  printf 'suite log: %s\n' "$SUITE_LOG"
+} | sanitize_stream | tee -a "$SUITE_LOG"
 
 passed=0
 failed=0

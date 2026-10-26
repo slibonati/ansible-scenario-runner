@@ -53,6 +53,25 @@ class RunnerTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertFalse(self.probe.exists())
 
+    def test_suite_banner_shows_effective_settings_without_runtime_details(self):
+        self.env['EE_IMAGE'] = 'localhost/review-ee:test'
+        self.env['EE_PULL_POLICY'] = 'never'
+        self.env['NAVIGATOR_CONTAINER_OPTIONS'] = '--network=host'
+        result = self.suite('scenarios: [{name: happy-path}]')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        banner = result.stdout.split('=== [happy-path] ===')[0]
+        self.assertIn('SCENARIO SUITE', banner)
+        self.assertIn(f'Manifest        : {self.root / "suite.yml"}', banner)
+        self.assertIn('Scenarios       : 1', banner)
+        self.assertIn('Execution image : localhost/review-ee:test', banner)
+        self.assertIn(f'Logs directory  : {self.root / "logs"}', banner)
+        self.assertNotIn('Pull policy', banner)
+        self.assertNotIn('--network=host', banner)
+        self.assertNotIn('vault', banner.lower())
+        summary = next((self.root / 'logs').glob('*suite-summary.log')).read_text()
+        self.assertIn('SCENARIO SUITE', summary)
+        self.assertIn('Execution image : localhost/review-ee:test', summary)
+
     def test_suite_runs_all_cases_after_failure(self):
         result = self.suite('scenarios: [{name: happy-path}, {name: echo-payload}]')
         self.assertEqual(result.returncode, 0, result.stderr)
