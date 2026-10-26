@@ -100,7 +100,9 @@ scripts currently require a vault file and password file for each run.
 
 Versioned inputs make reruns easier to reproduce. Results still depend on the
 target system, secrets, and execution environment. Pin the environment image
-when consistent dependencies matter.
+when consistent dependencies matter. See the demo’s
+[tested environment](docs/api-client-example.md#tested-environment) for a
+known-working setup.
 
 ## Scenario configuration
 

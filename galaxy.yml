@@ -6,8 +6,8 @@ readme: README.md
 authors:
   - Contributors
 description: >
-  Demo Ansible collection with an api_client role (vaulted Bearer URI),
-  exercised with inventory + scenario files.
+  Repeatable scenario-based testing for Ansible roles, with ordered suites,
+  expected outcomes, and readable execution logs. Includes an API client example.
 license:
   - MIT
 tags:
@@ -15,10 +15,10 @@ tags:
   - api
   - example
 dependencies: {}
-repository: ""
-documentation: ""
-homepage: ""
-issues: ""
+repository: "https://github.com/slibonati/ansible-scenario-runner"
+documentation: "https://github.com/slibonati/ansible-scenario-runner#readme"
+homepage: "https://github.com/slibonati/ansible-scenario-runner"
+issues: "https://github.com/slibonati/ansible-scenario-runner/issues"
 build_ignore:
   - .git
   - .gitignore
