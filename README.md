@@ -1,29 +1,26 @@
 # ansible-scenario-runner
 
 A consistent way for teams to test Ansible automation before handing it off for
-use in larger workflows. Keep test scenarios alongside the code so developers
-and teammates can run the same checks and review the results.
+use in larger workflows. Keep test scenarios alongside the code so anyone on
+the team can run them and review the results.
 
 ## Motivation
 
 This runner grew out of a client project developing Ansible automation for
-disaster recovery and failover. One part of the team built the automation,
-while another consumed it through job workflows in Ansible Automation Platform
-(AAP). That handoff called for thorough tests that anyone on the team could run
-consistently.
+disaster recovery and business continuity. One part of the team built the
+automation, while another incorporated it into workflows in Ansible Automation
+Platform (AAP). That handoff called for thorough tests that anyone on the team
+could run consistently.
 
-The goal was to keep the collection and everything needed to develop, test,
-and demonstrate its roles together in Git, instead of maintaining a separate
-development directory. That gave the team one shared setup to work from.
+Keeping the collection and everything needed to develop, test, and demonstrate
+its roles together in Git eliminated a separate development directory.
+Team-wide adoption would give everyone a shared setup and testing routine,
+replacing individual conventions.
 
 Prepared scenarios also made client demonstrations more predictable, reducing
-the need to assemble commands during a call. Clean log files made it easier to
+the need to assemble commands while presenting. Clean log files made it easier to
 collect results from the development environment and share evidence in
-Confluence, regardless of the terminal or file-transfer tools people used.
-
-The goal was a shared testing routine: keep scenarios alongside the automation,
-run them through consistent commands, and capture readable results. Team-wide
-adoption would replace individual testing conventions with a repeatable approach.
+Confluence, regardless of the terminal or file-transfer tools team members used.
 
 ## Start here
 
