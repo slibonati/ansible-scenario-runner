@@ -78,28 +78,19 @@ The first run may need to pull it. To use an image already available in your
 environment, export `EE_IMAGE` before running the scripts; it must contain the
 Ansible dependencies needed by the role.
 
+Navigator starts the execution environment through your configured container
+engine; you do not need to start the container separately.
+
 ## Tested environment
 
-The fresh-clone walkthrough was tested on October 25, 2026 with:
+The example was tested with:
 
 | Component | Version |
 | --- | --- |
 | Ansible Navigator | 25.12.0 |
 | Podman | 5.8.9 |
 | Execution image | `quay.io/ansible/creator-ee:latest` |
-| Ansible Core inside the image | 2.16.3 |
-| Python inside the image | 3.12.1 |
-| Jinja inside the image | 3.1.3 |
-
-The local image ID was:
-
-```text
-ddb78cf5ef525faf46344166172f3ddba05e680ff28341d41168a93d7c51fd55
-```
-
-This records the tested setup; the `latest` tag can refer to a different image
-later. Navigator launches the execution environment through Podman; normal
-scenario runs do not require you to launch the container separately.
+| Ansible Core in the image | 2.16.3 |
 
 ## Walkthrough
 
