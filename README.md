@@ -317,7 +317,8 @@ Failure to write a requested log fails the run.
 
 `--clean-logs`, or `CLEAR_LOGS=1`, removes existing `logs/*.log` before a suite
 run while retaining the directory and `.gitkeep`. Text cleanup strips terminal
-formatting and control characters and normalizes line endings. It does not
+formatting, framed Ansible Runner event metadata, and control characters, and
+normalizes line endings. It does not
 redact secrets. Console output remains unchanged.
 
 ### Direct Ansible invocation

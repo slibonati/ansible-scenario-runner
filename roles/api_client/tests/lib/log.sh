@@ -4,6 +4,7 @@
 #
 # Sanitization (applied to log files only; console keeps raw stream):
 #   - Decode as UTF-8 (replace undecodable bytes)
+#   - Remove framed Ansible Runner event metadata before stripping terminal controls
 #   - Strip ANSI / CSI escape sequences (colors, cursor moves)
 #   - Drop other C0/C1 control chars except newline and tab
 #   - Normalize CRLF → LF
@@ -69,8 +70,15 @@ suite_log_path() {
 # Uses python3 -c so real stdin is the stream to sanitize (not the program text).
 sanitize_stream() {
   python3 -c '
+import base64
+import binascii
+import json
 import re
 import sys
+
+# Ansible Runner wraps base64 event metadata in erase-line/cursor-back controls.
+# Remove the whole frame first; stripping only the controls exposes its payload.
+_RUNNER_EVENT = re.compile(r"\x1b\[K((?:[A-Za-z0-9+/=]+\x1b\[\d+D)+)\x1b\[K")
 
 _ANSI = re.compile(
     r"(?:\x1B[@-Z\\-_]"
@@ -79,8 +87,19 @@ _ANSI = re.compile(
     r"|\x9B[0-?]*[ -/]*[@-~])"
 )
 
+def remove_runner_event(match):
+    payload = re.sub(r"\x1b\[\d+D", "", match.group(1))
+    try:
+        event = json.loads(base64.b64decode(payload, validate=True).decode("utf-8"))
+    except (binascii.Error, UnicodeError, ValueError):
+        return match.group(0)
+    if isinstance(event, dict) and (not event or (set(event) == {"uuid"} and isinstance(event["uuid"], str))):
+        return ""
+    return match.group(0)
+
 def sanitize(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = _RUNNER_EVENT.sub(remove_runner_event, text)
     text = _ANSI.sub("", text)
     out = []
     for ch in text:
