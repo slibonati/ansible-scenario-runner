@@ -9,42 +9,17 @@ and teammates can run the same checks and review the results.
 This runner grew out of a client project developing Ansible automation for
 disaster recovery and failover. One part of the team built the automation,
 while another consumed it through job workflows in Ansible Automation Platform
-(AAP).
+(AAP). That handoff called for thorough tests that anyone on the team could run
+consistently.
 
-That handoff made it important to have thorough tests that anyone on the team
-could run. Developers needed to verify that their automation behaved correctly
-across expected conditions and handled failures appropriately before it became
-part of a larger workflow. Teammates also needed a way to repeat those checks
-without reconstructing each developer’s commands and setup.
+Prepared scenarios also made client demonstrations more predictable, reducing
+the need to assemble commands during a call. Clean log files made it easier to
+collect results from the development environment and share evidence in
+Confluence, regardless of the terminal or file-transfer tools people used.
 
-The runner was built to give the team a common way to test automation. Scenario
-files define the variables for each test case. The suite manifest selects the
-cases to run and declares whether each should succeed or fail. The runner
-executes those tests, compares the exit status with the expected outcome, and
-captures the output. The same scenarios support
-individual development and regression testing, with test definitions kept
-alongside the role in Git. Team-wide adoption was the intended next step:
-replacing individual testing conventions with a shared, repeatable routine.
-
-The same approach also helped with client demonstrations. Instead of assembling
-commands during a call, developers could run prepared scenarios in a consistent
-way. That reduced manual steps, made demonstrations more predictable, and kept
-the focus on the automation’s behavior.
-
-Capturing test evidence was another practical need. Results had to be collected
-from the development environment and uploaded to Confluence. Saving each run’s
-output and the suite summary in a log directory provided a consistent set of
-files to transfer and share, regardless of which terminal or file-transfer tool
-a team member used.
-
-These are role-level scenario tests. Depending on what a role calls or changes,
-they can exercise integration behavior as well as individual automation logic.
-The harness makes tests repeatable; the scenarios and assertions you write
-determine how comprehensive they are. It does not test AAP workflow orchestration.
-
-Molecule was explored, but setup friction in the target environment and the
-complexity needed for this use case led to a smaller harness built directly
-on Ansible primitives.
+The goal was a shared testing routine: keep scenarios alongside the automation,
+run them through consistent commands, and capture readable results. Team-wide
+adoption would replace individual testing conventions with a repeatable approach.
 
 ## Start here
 
@@ -85,6 +60,11 @@ the worked example.
 The baseline is one playbook and one inventory, with explicit overrides for
 cases that need a different execution context. The wrappers are optional:
 the playbook and scenario files can also be used directly with Ansible.
+
+These are role-level scenario tests. Depending on what a role calls or changes,
+they can exercise integration behavior as well as individual automation logic.
+The scenarios and assertions determine the coverage; the runner does not test
+AAP workflow orchestration.
 
 ### Framework files
 
