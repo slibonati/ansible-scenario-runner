@@ -26,6 +26,14 @@ demonstrations more predictable.
 Together, these conventions offered a shared testing routine that the team could
 adopt in place of individual approaches.
 
+### Why not Molecule?
+
+Molecule was considered for role testing, but it introduced friction in the
+client environment and more complexity than this use case required. The goal
+here was a lightweight approach built on ordinary Ansible playbooks, variables,
+and execution conventions, with shell scripts only for repeatable runs and log
+capture. This runner is not intended to replace Molecule where it is a good fit.
+
 ## Start here
 
 ```bash
